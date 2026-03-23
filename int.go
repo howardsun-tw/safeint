@@ -1,6 +1,11 @@
 package safeint
 
-import "fmt"
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"strconv"
+)
 
 // Int is a generic wrapper around Go's native integer types, providing
 // method-based arithmetic with overflow detection.
@@ -199,4 +204,96 @@ func (a Int[T]) String() string { return fmt.Sprint(a.val) }
 func ConvertInt[T Integer, U Integer](a Int[T]) (Int[U], bool) {
 	r, ok := Convert[T, U](a.val)
 	return Int[U]{val: r}, ok
+}
+
+// ---------------------------------------------------------------------------
+// Serialization — JSON
+// ---------------------------------------------------------------------------
+
+// MarshalJSON implements json.Marshaler.
+func (a Int[T]) MarshalJSON() ([]byte, error) {
+	if isSigned[T]() {
+		return strconv.AppendInt(nil, int64(a.val), 10), nil
+	}
+	return strconv.AppendUint(nil, uint64(a.val), 10), nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (a *Int[T]) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &a.val)
+}
+
+// ---------------------------------------------------------------------------
+// Serialization — database/sql
+// ---------------------------------------------------------------------------
+
+// Value implements driver.Valuer.
+// Returns the underlying value as int64, or as a decimal string if it
+// overflows int64 (e.g. uint64 > MaxInt64).
+func (a Int[T]) Value() (driver.Value, error) {
+	v, ok := Convert[T, int64](a.val)
+	if !ok {
+		return strconv.FormatUint(uint64(a.val), 10), nil
+	}
+	return v, nil
+}
+
+// Scan implements sql.Scanner.
+// Accepts int64, float64 (whole numbers only), []byte, string, or nil.
+func (a *Int[T]) Scan(src interface{}) error {
+	if src == nil {
+		a.val = 0
+		return nil
+	}
+	switch v := src.(type) {
+	case int64:
+		r, ok := Convert[int64, T](v)
+		if !ok {
+			return fmt.Errorf("safeint: value %d overflows %T", v, a.val)
+		}
+		a.val = r
+		return nil
+	case float64:
+		i := int64(v)
+		if float64(i) != v {
+			return fmt.Errorf("safeint: float64 value %g is not an integer", v)
+		}
+		r, ok := Convert[int64, T](i)
+		if !ok {
+			return fmt.Errorf("safeint: value %g overflows %T", v, a.val)
+		}
+		a.val = r
+		return nil
+	case []byte:
+		return a.scanString(string(v))
+	case string:
+		return a.scanString(v)
+	default:
+		return fmt.Errorf("safeint: unsupported Scan source type %T", src)
+	}
+}
+
+func (a *Int[T]) scanString(s string) error {
+	if isSigned[T]() {
+		i, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return fmt.Errorf("safeint: cannot scan %q: %w", s, err)
+		}
+		r, ok := Convert[int64, T](i)
+		if !ok {
+			return fmt.Errorf("safeint: value %d overflows %T", i, a.val)
+		}
+		a.val = r
+		return nil
+	}
+	u, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return fmt.Errorf("safeint: cannot scan %q: %w", s, err)
+	}
+	r, ok := Convert[uint64, T](u)
+	if !ok {
+		return fmt.Errorf("safeint: value %d overflows %T", u, a.val)
+	}
+	a.val = r
+	return nil
 }
