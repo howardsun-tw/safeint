@@ -943,6 +943,30 @@ func TestMulDiv(t *testing.T) {
 	})
 }
 
+func checkMulDivOverflowZero[T Integer](t *testing.T, a, b, c T) {
+	t.Helper()
+	if r, ok := MulDiv(a, b, c); ok || r != 0 {
+		t.Errorf("MulDiv[%T](%d,%d,%d) = (%d,%v), want (0,false)", a, a, b, c, r, ok)
+	}
+	if r, ok := New(a).MulDivOverflow(New(b), New(c)); ok || r.Val() != 0 {
+		t.Errorf("MulDivOverflow[%T] = (%d,%v), want (0,false)", a, r.Val(), ok)
+	}
+}
+
+func TestMulDivOverflowZero(t *testing.T) {
+	checkMulDivOverflowZero[int8](t, 100, 50, 25)
+	checkMulDivOverflowZero[int8](t, -100, 50, 25)
+	checkMulDivOverflowZero[int16](t, math.MaxInt16, 2, 1)
+	checkMulDivOverflowZero[int32](t, math.MaxInt32, 2, 1)
+	checkMulDivOverflowZero[int64](t, math.MaxInt64, 2, 1)
+	checkMulDivOverflowZero[int](t, int(^uint(0)>>1), 2, 1)
+	checkMulDivOverflowZero[uint8](t, math.MaxUint8, 2, 1)
+	checkMulDivOverflowZero[uint16](t, math.MaxUint16, 2, 1)
+	checkMulDivOverflowZero[uint32](t, math.MaxUint32, 2, 1)
+	checkMulDivOverflowZero[uint64](t, math.MaxUint64, 2, 1)
+	checkMulDivOverflowZero[uint](t, ^uint(0), 2, 1)
+}
+
 func TestMulMod(t *testing.T) {
 	t.Run("MaxUint64_MaxUint64_MaxUint64", func(t *testing.T) {
 		r, ok := MulMod[uint64](math.MaxUint64, math.MaxUint64, math.MaxUint64)

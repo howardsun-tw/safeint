@@ -221,11 +221,19 @@ func mulDivSmall[T Integer](a, b, c T) (T, bool) {
 	if isSigned[T]() {
 		wide := int64(a) * int64(b)
 		q := wide / int64(c)
-		return Convert[int64, T](q)
+		r, ok := Convert[int64, T](q)
+		if !ok {
+			return 0, false
+		}
+		return r, true
 	}
 	wide := uint64(a) * uint64(b)
 	q := wide / uint64(c)
-	return Convert[uint64, T](q)
+	r, ok := Convert[uint64, T](q)
+	if !ok {
+		return 0, false
+	}
+	return r, true
 }
 
 // mulModSmall handles MulMod for types that fit in 64-bit intermediates.
