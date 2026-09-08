@@ -10,7 +10,7 @@ Go's native integer operations silently wrap on overflow. `safeint` makes overfl
 go get github.com/howardsun-tw/safeint
 ```
 
-Requires Go 1.18+ (generics). Tested on Go 1.18 through 1.26.
+Requires Go 1.18+ (generics). Tested on Go 1.18 through 1.27.
 
 ## API Overview
 
@@ -173,7 +173,7 @@ go test ./...
 
 ### Go Version Compatibility
 
-CI tests against every Go release from 1.18 to 1.26. The minimum version is Go 1.18 (the release that introduced generics).
+CI tests against every Go release from 1.18 to 1.27. The minimum version is Go 1.18 (the release that introduced generics).
 
 ## Security Note
 
