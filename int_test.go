@@ -1703,6 +1703,76 @@ func TestScan_Float64(t *testing.T) {
 	})
 }
 
+func TestScan_Float64Boundaries(t *testing.T) {
+	t.Run("signed", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			src  float64
+			want int64
+			ok   bool
+		}{
+			{"min", -0x1p63, math.MinInt64, true},
+			{"below_min", math.Nextafter(-0x1p63, math.Inf(-1)), 0, false},
+			{"below_upper_bound", math.Nextafter(0x1p63, 0), math.MaxInt64 - 1023, true},
+			{"upper_bound", 0x1p63, 0, false},
+			{"above_upper_bound", math.Nextafter(0x1p63, math.Inf(1)), 0, false},
+			{"nan", math.NaN(), 0, false},
+			{"positive_infinity", math.Inf(1), 0, false},
+			{"negative_infinity", math.Inf(-1), 0, false},
+			{"fraction", 1.5, 0, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				v := New[int64](7)
+				err := v.Scan(tc.src)
+				if (err == nil) != tc.ok {
+					t.Fatalf("Scan(%g): error = %v, want success = %v", tc.src, err, tc.ok)
+				}
+				want := tc.want
+				if !tc.ok {
+					want = 7 // Failed scans must preserve the previous value.
+				}
+				if v.Val() != want {
+					t.Fatalf("Scan(%g): value = %d, want %d", tc.src, v.Val(), want)
+				}
+			})
+		}
+	})
+	t.Run("unsigned", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			src  float64
+			want uint64
+			ok   bool
+		}{
+			{"zero", 0, 0, true},
+			{"negative_zero", math.Copysign(0, -1), 0, true},
+			{"negative", -1, 0, false},
+			{"signed_upper_bound", 0x1p63, 1 << 63, true},
+			{"below_upper_bound", math.Nextafter(0x1p64, 0), math.MaxUint64 - 2047, true},
+			{"upper_bound", 0x1p64, 0, false},
+			{"nan", math.NaN(), 0, false},
+			{"positive_infinity", math.Inf(1), 0, false},
+			{"negative_infinity", math.Inf(-1), 0, false},
+			{"fraction", 1.5, 0, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				v := New[uint64](7)
+				err := v.Scan(tc.src)
+				if (err == nil) != tc.ok {
+					t.Fatalf("Scan(%g): error = %v, want success = %v", tc.src, err, tc.ok)
+				}
+				want := tc.want
+				if !tc.ok {
+					want = 7
+				}
+				if v.Val() != want {
+					t.Fatalf("Scan(%g): value = %d, want %d", tc.src, v.Val(), want)
+				}
+			})
+		}
+	})
+}
+
 func TestScan_ByteSlice(t *testing.T) {
 	t.Run("signed_positive", func(t *testing.T) {
 		var v Int[int32]

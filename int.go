@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -254,11 +255,24 @@ func (a *Int[T]) Scan(src interface{}) error {
 		a.val = r
 		return nil
 	case float64:
-		i := int64(v)
-		if float64(i) != v {
+		if math.IsNaN(v) || math.IsInf(v, 0) || math.Trunc(v) != v {
 			return fmt.Errorf("safeint: float64 value %g is not an integer", v)
 		}
-		r, ok := Convert[int64, T](i)
+		var r T
+		var ok bool
+		// Check exact, exclusive upper bounds before converting. MaxInt64
+		// and MaxUint64 round up to these bounds when converted to float64.
+		if isSigned[T]() {
+			if v < -0x1p63 || v >= 0x1p63 {
+				return fmt.Errorf("safeint: value %g overflows %T", v, a.val)
+			}
+			r, ok = Convert[int64, T](int64(v))
+		} else {
+			if v < 0 || v >= 0x1p64 {
+				return fmt.Errorf("safeint: value %g overflows %T", v, a.val)
+			}
+			r, ok = Convert[uint64, T](uint64(v))
+		}
 		if !ok {
 			return fmt.Errorf("safeint: value %g overflows %T", v, a.val)
 		}
