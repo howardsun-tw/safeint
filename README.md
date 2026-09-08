@@ -56,6 +56,10 @@ converted := safeint.MustConvert[int64, int32](a)
 
 ### 3. `Int[T]` Wrapper Type — method-based API
 
+JSON encoding and decoding use the underlying integer as a JSON number, even
+when `T` defines custom JSON methods. Decoding `null` or invalid input leaves
+the value unchanged; out-of-range numbers are rejected.
+
 A value-type wrapper providing three method families:
 
 ```go

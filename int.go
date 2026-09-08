@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 )
 
@@ -214,7 +215,8 @@ func ConvertInt[T Integer, U Integer](a Int[T]) (Int[U], bool) {
 // Serialization — JSON
 // ---------------------------------------------------------------------------
 
-// MarshalJSON implements json.Marshaler.
+// MarshalJSON implements json.Marshaler using the underlying integer value.
+// Custom JSON methods on T are not used.
 func (a Int[T]) MarshalJSON() ([]byte, error) {
 	if isSigned[T]() {
 		return strconv.AppendInt(nil, int64(a.val), 10), nil
@@ -222,9 +224,29 @@ func (a Int[T]) MarshalJSON() ([]byte, error) {
 	return strconv.AppendUint(nil, uint64(a.val), 10), nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements json.Unmarshaler using the underlying integer value.
+// Custom JSON methods on T are not used. Null and invalid input leave the value unchanged.
 func (a *Int[T]) UnmarshalJSON(data []byte) error {
-	return json.Unmarshal(data, &a.val)
+	var value T
+	var ok bool
+	if isSigned[T]() {
+		n := int64(a.val)
+		if err := json.Unmarshal(data, &n); err != nil {
+			return err
+		}
+		value, ok = Convert[int64, T](n)
+	} else {
+		n := uint64(a.val)
+		if err := json.Unmarshal(data, &n); err != nil {
+			return err
+		}
+		value, ok = Convert[uint64, T](n)
+	}
+	if !ok {
+		return &json.UnmarshalTypeError{Value: "number " + string(data), Type: reflect.TypeOf(a.val)}
+	}
+	a.val = value
+	return nil
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -1059,6 +1060,135 @@ func TestValueSemantics(t *testing.T) {
 // ---------------------------------------------------------------------------
 // JSON serialization tests
 // ---------------------------------------------------------------------------
+
+type jsonIndex int64
+
+func (v jsonIndex) MarshalJSON() ([]byte, error) { return json.Marshal(int64(v) + 1) }
+func (v *jsonIndex) UnmarshalJSON(data []byte) error {
+	var n int64
+	if err := json.Unmarshal(data, &n); err != nil {
+		return err
+	}
+	*v = jsonIndex(n - 1)
+	return nil
+}
+
+func TestJSON_NamedCodecNumericRoundTrip(t *testing.T) {
+	original := jsonIndex(1)
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bare jsonIndex
+	if err := json.Unmarshal(data, &bare); err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "2" || bare != original {
+		t.Fatalf("bare codec: JSON=%s, value=%d", data, bare)
+	}
+	data, err = json.Marshal(New(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "1" {
+		t.Fatalf("wrapped JSON = %s, want 1", data)
+	}
+	var decoded Int[jsonIndex]
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Val() != original {
+		t.Fatalf("roundtrip value = %d, want %d", decoded.Val(), original)
+	}
+}
+
+type jsonQuotedUint uint64
+
+func (v jsonQuotedUint) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strconv.FormatUint(uint64(v), 10))
+}
+func (v *jsonQuotedUint) UnmarshalJSON(data []byte) error {
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		return err
+	}
+	n, err := strconv.ParseUint(text, 10, 64)
+	if err == nil {
+		*v = jsonQuotedUint(n)
+	}
+	return err
+}
+
+func TestJSON_NamedQuotedCodecNumericRoundTrip(t *testing.T) {
+	original := jsonQuotedUint(math.MaxUint64)
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bare jsonQuotedUint
+	if err := json.Unmarshal(data, &bare); err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `"18446744073709551615"` || bare != original {
+		t.Fatalf("bare codec: JSON=%s, value=%d", data, bare)
+	}
+	data, err = json.Marshal(New(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "18446744073709551615" {
+		t.Fatalf("wrapped JSON = %s", data)
+	}
+	var decoded Int[jsonQuotedUint]
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Val() != original {
+		t.Fatalf("roundtrip value = %d, want %d", decoded.Val(), original)
+	}
+}
+
+func checkJSONDecodeState[T Integer](t *testing.T, boundaries []T, invalid []string) {
+	t.Helper()
+	v := New(T(7))
+	for _, data := range append([]string{`"8"`, "true", "{}", "[]", "1.5", "1e1", "{"}, invalid...) {
+		if err := json.Unmarshal([]byte(data), &v); err == nil {
+			t.Fatalf("accepted invalid input %s", data)
+		}
+		if v.Val() != 7 {
+			t.Fatalf("input %s changed value to %d", data, v.Val())
+		}
+	}
+	if err := json.Unmarshal([]byte(" \n null \t"), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Val() != 7 {
+		t.Fatalf("null changed value to %d", v.Val())
+	}
+	for _, want := range boundaries {
+		data, err := json.Marshal(New(want))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &v); err != nil {
+			t.Fatal(err)
+		}
+		if v.Val() != want {
+			t.Fatalf("input %s decoded to %d, want %d", data, v.Val(), want)
+		}
+	}
+}
+
+func TestJSON_NumericDecodeState(t *testing.T) {
+	t.Run("int8", func(t *testing.T) { checkJSONDecodeState(t, []int8{-128, 127}, []string{"-129", "128"}) })
+	t.Run("uint8", func(t *testing.T) { checkJSONDecodeState(t, []uint8{0, 255}, []string{"-1", "256"}) })
+	t.Run("named_signed", func(t *testing.T) {
+		checkJSONDecodeState(t, []jsonIndex{math.MinInt64, math.MaxInt64}, []string{"-9223372036854775809", "9223372036854775808"})
+	})
+	t.Run("named_unsigned", func(t *testing.T) {
+		checkJSONDecodeState(t, []jsonQuotedUint{0, math.MaxUint64}, []string{"-1", "18446744073709551616"})
+	})
+}
 
 func TestMarshalJSON(t *testing.T) {
 	tests := []struct {
