@@ -3,7 +3,9 @@ package safeint
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"math"
+	"reflect"
 	"strconv"
 	"testing"
 )
@@ -910,6 +912,11 @@ func TestIsZeroUnsigned(t *testing.T) {
 // 6. String tests
 // ---------------------------------------------------------------------------
 
+// stringerInt defines its own String method, which Int[T].String must ignore.
+type stringerInt int64
+
+func (stringerInt) String() string { return "custom" }
+
 func TestString(t *testing.T) {
 	tests := []struct {
 		name string
@@ -920,6 +927,8 @@ func TestString(t *testing.T) {
 		{"negative_int64", "-7", New[int64](-7).String()},
 		{"uint8_max", "255", New[uint8](255).String()},
 		{"zero", "0", New[int64](0).String()},
+		{"uint64_max", "18446744073709551615", New[uint64](math.MaxUint64).String()},
+		{"named_stringer_ignored", "25", New[stringerInt](25).String()},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1227,6 +1236,90 @@ func TestMarshalJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUnmarshalJSONErrorType verifies that every rejected input reports the
+// wrapper type Int[T] in UnmarshalTypeError.Type, regardless of whether the
+// rejection came from the intermediate int64/uint64 decode or from the
+// narrowing conversion.
+func TestUnmarshalJSONErrorType(t *testing.T) {
+	check := func(t *testing.T, err error, target interface{}, wantValue string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		var ute *json.UnmarshalTypeError
+		if !errors.As(err, &ute) {
+			t.Fatalf("error type = %T, want *json.UnmarshalTypeError", err)
+		}
+		if want := reflect.TypeOf(target).Elem(); ute.Type != want {
+			t.Fatalf("Type = %v, want %v", ute.Type, want)
+		}
+		if ute.Value != wantValue {
+			t.Fatalf("Value = %q, want %q", ute.Value, wantValue)
+		}
+	}
+	t.Run("uint8_overflow_narrowing", func(t *testing.T) {
+		var v Int[uint8]
+		check(t, json.Unmarshal([]byte("256"), &v), &v, "number 256")
+	})
+	t.Run("uint8_negative_intermediate", func(t *testing.T) {
+		var v Int[uint8]
+		check(t, json.Unmarshal([]byte("-1"), &v), &v, "number -1")
+	})
+	t.Run("int8_overflow_narrowing", func(t *testing.T) {
+		var v Int[int8]
+		check(t, json.Unmarshal([]byte("128"), &v), &v, "number 128")
+	})
+	t.Run("int8_underflow_narrowing", func(t *testing.T) {
+		var v Int[int8]
+		check(t, json.Unmarshal([]byte("-129"), &v), &v, "number -129")
+	})
+	t.Run("int64_overflow_intermediate", func(t *testing.T) {
+		var v Int[int64]
+		check(t, json.Unmarshal([]byte("9223372036854775808"), &v), &v, "number 9223372036854775808")
+	})
+	t.Run("uint64_overflow_intermediate", func(t *testing.T) {
+		var v Int[uint64]
+		check(t, json.Unmarshal([]byte("18446744073709551616"), &v), &v, "number 18446744073709551616")
+	})
+	t.Run("uint64_negative_intermediate", func(t *testing.T) {
+		var v Int[uint64]
+		check(t, json.Unmarshal([]byte("-1"), &v), &v, "number -1")
+	})
+	t.Run("string_into_int32", func(t *testing.T) {
+		var v Int[int32]
+		check(t, json.Unmarshal([]byte(`"hello"`), &v), &v, "string")
+	})
+	t.Run("float_into_int32", func(t *testing.T) {
+		var v Int[int32]
+		check(t, json.Unmarshal([]byte("1.5"), &v), &v, "number 1.5")
+	})
+	t.Run("value_unchanged_on_error", func(t *testing.T) {
+		v := New[int8](7)
+		if err := json.Unmarshal([]byte("128"), &v); err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if v.Val() != 7 {
+			t.Fatalf("Val = %d, want 7 (unchanged)", v.Val())
+		}
+	})
+	t.Run("syntax_error_passes_through", func(t *testing.T) {
+		var v Int[int32]
+		err := v.UnmarshalJSON([]byte("abc"))
+		var se *json.SyntaxError
+		if !errors.As(err, &se) {
+			t.Fatalf("error type = %T, want *json.SyntaxError", err)
+		}
+	})
+	// encoding/json does not annotate errors returned by an Unmarshaler with
+	// Struct/Field, so only Type and Value are asserted for nested fields.
+	t.Run("nested_struct_field", func(t *testing.T) {
+		var s struct {
+			Count Int[uint8] `json:"count"`
+		}
+		check(t, json.Unmarshal([]byte(`{"count": -1}`), &s), &s.Count, "number -1")
+	})
 }
 
 func TestUnmarshalJSON(t *testing.T) {

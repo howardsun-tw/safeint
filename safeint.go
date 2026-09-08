@@ -79,9 +79,8 @@ func Div[T Integer](a, b T) (T, bool) {
 	if isSigned[T]() && a == minValue[T]() && b == ^T(0) {
 		return 0, false
 	}
-	q := a / b
-	ok := q == 0 || (q < 0) == ((a < 0) != (b < 0))
-	return q, ok
+	// After the guards above, a / b cannot overflow for any integer type.
+	return a / b, true
 }
 
 // DivMod returns (a/b, a%b) and true if the quotient does not overflow.
@@ -96,10 +95,8 @@ func DivMod[T Integer](a, b T) (T, T, bool) {
 	if isSigned[T]() && a == minValue[T]() && b == ^T(0) {
 		return 0, 0, false
 	}
-	q := a / b
-	// q == 0 handles truncation-to-zero with mixed signs (fixes g-utils/overflow bug).
-	ok := q == 0 || (q < 0) == ((a < 0) != (b < 0))
-	return q, a % b, ok
+	// After the guards above, a / b cannot overflow for any integer type.
+	return a / b, a % b, true
 }
 
 // Mod returns a % b and true. Returns (0, false) only on division by zero.
@@ -324,14 +321,9 @@ func mulMod64Signed[T Integer](a, b, c T) (T, bool) {
 	hi = hi % uc
 	_, rem := bits.Div64(hi, lo, uc)
 
-	if negative && rem != 0 {
-		if rem > uint64(maxSigned64)+1 {
-			return 0, false
-		}
+	// rem < uc <= 1<<63, so rem always fits in int64 with either sign.
+	if negative {
 		return T(-int64(rem)), true
-	}
-	if rem > uint64(maxSigned64) {
-		return 0, false
 	}
 	return T(int64(rem)), true
 }
@@ -424,7 +416,9 @@ func minValue[T Integer]() T {
 const maxSigned64 = int64(1<<63 - 1)
 
 // toUint64Abs returns the absolute value of a as uint64.
-// Go's two's complement conversion handles MinInt correctly:
+// Precondition: T is a 64-bit type. For narrower signed T, -MinT wraps to
+// MinT and the sign-extended uint64 conversion would be wrong.
+// Go's two's complement conversion handles MinInt64 correctly:
 // uint64(-MinInt64) == 1 << 63.
 func toUint64Abs[T Integer](a T) uint64 {
 	if a < 0 {

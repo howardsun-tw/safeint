@@ -1034,6 +1034,26 @@ func TestMulMod(t *testing.T) {
 		}
 	})
 
+	// c == MinInt64 exercises the upper bound of toUint64Abs(c) == 1<<63,
+	// where the remainder can reach MaxInt64 in magnitude.
+	t.Run("int64_modulus_min_int64", func(t *testing.T) {
+		cases := []struct{ a, b int64 }{
+			{math.MaxInt64, -1},
+			{math.MaxInt64, 2},
+			{math.MinInt64, 3},
+			{math.MinInt64, math.MinInt64},
+			{-math.MaxInt64, math.MaxInt64},
+		}
+		for _, tc := range cases {
+			r, ok := MulMod[int64](tc.a, tc.b, math.MinInt64)
+			ref := new(big.Int).Mul(big.NewInt(tc.a), big.NewInt(tc.b))
+			ref.Rem(ref, big.NewInt(math.MinInt64))
+			if !ok || !ref.IsInt64() || r != ref.Int64() {
+				t.Errorf("MulMod(%d,%d,MinInt64): got=(%d,%v), want=(%s,true)", tc.a, tc.b, r, ok, ref)
+			}
+		}
+	})
+
 	t.Run("int64_negative_dividend", func(t *testing.T) {
 		r, ok := MulMod[int64](-7, 5, 3)
 		// -7*5 = -35, -35 % 3 = -2 (Go truncates toward zero).

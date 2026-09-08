@@ -3,6 +3,7 @@ package safeint
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -197,8 +198,14 @@ func (a Int[T]) IsZero() bool { return a.val == 0 }
 // Val returns the underlying raw value.
 func (a Int[T]) Val() T { return a.val }
 
-// String implements fmt.Stringer.
-func (a Int[T]) String() string { return fmt.Sprint(a.val) }
+// String implements fmt.Stringer using the underlying integer value in
+// decimal. A String method defined on T is not used, matching MarshalJSON.
+func (a Int[T]) String() string {
+	if isSigned[T]() {
+		return strconv.FormatInt(int64(a.val), 10)
+	}
+	return strconv.FormatUint(uint64(a.val), 10)
+}
 
 // ---------------------------------------------------------------------------
 // Conversion (standalone — Go methods cannot have extra type parameters)
@@ -226,27 +233,44 @@ func (a Int[T]) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements json.Unmarshaler using the underlying integer value.
 // Custom JSON methods on T are not used. Null and invalid input leave the value unchanged.
+//
+// Every rejected input reports Int[T] as UnmarshalTypeError.Type, whether the
+// rejection came from the intermediate int64/uint64 decode or from narrowing
+// to T. Other errors (e.g. *json.SyntaxError) are returned unchanged.
 func (a *Int[T]) UnmarshalJSON(data []byte) error {
 	var value T
 	var ok bool
 	if isSigned[T]() {
 		n := int64(a.val)
 		if err := json.Unmarshal(data, &n); err != nil {
-			return err
+			return a.retypeError(err)
 		}
 		value, ok = Convert[int64, T](n)
 	} else {
 		n := uint64(a.val)
 		if err := json.Unmarshal(data, &n); err != nil {
-			return err
+			return a.retypeError(err)
 		}
 		value, ok = Convert[uint64, T](n)
 	}
 	if !ok {
-		return &json.UnmarshalTypeError{Value: "number " + string(data), Type: reflect.TypeOf(a.val)}
+		return &json.UnmarshalTypeError{Value: "number " + string(data), Type: reflect.TypeOf(*a)}
 	}
 	a.val = value
 	return nil
+}
+
+// retypeError rewrites the Type of a *json.UnmarshalTypeError produced by the
+// intermediate int64/uint64 decode so it names Int[T] instead. A copy is
+// returned; the original error is not mutated. Other errors pass through.
+func (a *Int[T]) retypeError(err error) error {
+	var ute *json.UnmarshalTypeError
+	if !errors.As(err, &ute) {
+		return err
+	}
+	retyped := *ute
+	retyped.Type = reflect.TypeOf(*a)
+	return &retyped
 }
 
 // ---------------------------------------------------------------------------
