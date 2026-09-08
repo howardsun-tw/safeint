@@ -91,7 +91,10 @@ func (a Int[T]) PowOverflow(exp uint) (Int[T], bool) {
 	return Int[T]{val: r}, ok
 }
 
-// LshOverflow returns a << n and true if no bits are lost.
+// LshOverflow returns the result of Lsh on the underlying value as an Int[T].
+// The bool is true on success and false on overflow. A zero value always
+// succeeds; a nonzero value shifted by at least the bit width of T returns
+// zero and false. Other overflow results are not guaranteed to be zero.
 func (a Int[T]) LshOverflow(n uint) (Int[T], bool) {
 	r, ok := Lsh(a.val, n)
 	return Int[T]{val: r}, ok

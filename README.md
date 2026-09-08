@@ -140,7 +140,17 @@ Some edge cases worth noting:
 - **Neg on unsigned** — overflow for any non-zero value.
 - **Abs on signed MinInt** — overflow (|MinInt| > MaxInt).
 - **0^0** — returns `(1, true)` by convention.
-- **Lsh** — returns `(0, false)` if shift >= bit width or bits are lost.
+
+### Left Shift Contract
+
+`Lsh(a, n)` follows these rules, in order:
+
+1. If `a == 0`, it returns `(0, true)` for any `n`.
+2. If `a != 0` and `n` is at least the bit width of the integer type, it returns `(0, false)`.
+3. Otherwise, it returns `a << n`. If the result overflows, `ok` is `false` and the shifted value is not guaranteed to be zero; otherwise, `ok` is `true`.
+
+`Int[T].LshOverflow` follows the same rules and wraps the result in `Int[T]`.
+Only treat the returned value as the exact mathematical result when `ok` is `true`.
 
 ## Type Constraints
 

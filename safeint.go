@@ -158,8 +158,11 @@ func Pow[T Integer](base T, exp uint) (T, bool) {
 	return result, true
 }
 
-// Lsh returns a << n and true if no bits are lost.
-// Always returns (0, true) when a == 0.
+// Lsh returns the left-shifted value and whether the result fits in T:
+//   - If a == 0, it returns (0, true) for any n.
+//   - If a != 0 and n is at least the bit width of T, it returns (0, false).
+//   - Otherwise, it returns a << n and reports overflow with ok == false.
+//     On overflow, the shifted value is not guaranteed to be zero.
 func Lsh[T Integer](a T, n uint) (T, bool) {
 	if a == 0 {
 		return 0, true
