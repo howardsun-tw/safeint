@@ -203,3 +203,8 @@ This project was inspired by and references ideas from:
 ## License
 
 MIT
+
+## Development toolchain
+
+Use Go 1.27.3 for development (`.go-version`) and the Go 1.27 CI lane.
+The library retains its Go 1.18 minimum and older-version CI coverage.
