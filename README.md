@@ -238,4 +238,5 @@ MIT
 ## Development toolchain
 
 Use Go 1.27.3 for development (`.go-version`) and the Go 1.27 CI lane.
-The library keeps its Go 1.24 minimum and older-version CI coverage.
+The library requires Go 1.24 or later (raised from Go 1.18), and CI also tests
+Go 1.24 through 1.26.

@@ -1806,6 +1806,21 @@ func TestSQL_RoundTrip(t *testing.T) {
 	})
 }
 
+// TestUnmarshalJSONFastPathAllocs guards the UnmarshalJSON comment that the
+// canonical-integer fast path does not allocate.
+func TestUnmarshalJSONFastPathAllocs(t *testing.T) {
+	data := []byte("-1234567")
+	var v Int[int64]
+	allocs := testing.AllocsPerRun(100, func() {
+		if err := v.UnmarshalJSON(data); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("UnmarshalJSON allocated %v times per call, want 0", allocs)
+	}
+}
+
 func BenchmarkUnmarshalJSON(b *testing.B) {
 	data := []byte(`[1,-22,333,-4444,55555,-666666,7777777,-88888888,999999999,0]`)
 	b.Run("Int[int64]", func(b *testing.B) {
@@ -1867,6 +1882,11 @@ func TestSQL_NullRoundTrip(t *testing.T) {
 	v, err := sql.Null[Int[int64]]{V: New[int64](5), Valid: true}.Value()
 	if err != nil || v != int64(5) {
 		t.Fatalf("Value = (%#v, %v), want (int64(5), nil)", v, err)
+	}
+	// Above MaxInt64, Int[T].Value returns a decimal string.
+	v, err = sql.Null[Int[uint64]]{V: New[uint64](math.MaxUint64), Valid: true}.Value()
+	if err != nil || v != "18446744073709551615" {
+		t.Fatalf("Value = (%#v, %v), want (\"18446744073709551615\", nil)", v, err)
 	}
 	var n sql.Null[Int[int64]]
 	if err := n.Scan(int64(7)); err != nil || !n.Valid || n.V.Val() != 7 {
