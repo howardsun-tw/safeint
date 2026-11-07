@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strconv"
@@ -91,7 +92,8 @@ func (a Int[T]) AbsOverflow() (Int[T], bool) {
 	return Int[T]{val: r}, ok
 }
 
-// PowOverflow returns a^exp and true if no overflow occurs.
+// PowOverflow returns a^exp and true if no overflow occurs. On overflow it
+// returns a^exp wrapped to T and false, like Pow.
 func (a Int[T]) PowOverflow(exp uint) (Int[T], bool) {
 	r, ok := Pow(a.val, exp)
 	return Int[T]{val: r}, ok
@@ -215,8 +217,18 @@ func (a Int[T]) String() string {
 // %c, with their flags, width and precision, format the underlying value
 // like a native integer. %v also formats it like a native integer, so %#v
 // does not print Go syntax for the struct. %s and %q format String().
-// Format and String methods defined on T are not used.
+// Format and String methods defined on T are not used. An unsupported verb
+// prints the native kind of T, for example %!f(int8=3).
 func (a Int[T]) Format(f fmt.State, verb rune) {
+	_, hasWidth := f.Width()
+	_, hasPrecision := f.Precision()
+	if (verb == 'v' || verb == 'd' || verb == 's') && !hasWidth && !hasPrecision &&
+		!f.Flag('+') && !f.Flag('-') && !f.Flag('#') && !f.Flag(' ') && !f.Flag('0') {
+		// Common case (Print, Println, plain %v and %d): skip the second
+		// Fprintf parse.
+		io.WriteString(f, a.String())
+		return
+	}
 	spec := []byte{'%'}
 	for _, flag := range "+-# 0" {
 		if f.Flag(int(flag)) {
@@ -231,13 +243,37 @@ func (a Int[T]) Format(f fmt.State, verb rune) {
 		spec = strconv.AppendInt(spec, int64(p), 10)
 	}
 	spec = append(spec, string(verb)...)
-	switch {
-	case verb == 's' || verb == 'q':
+	if verb == 's' || verb == 'q' {
 		fmt.Fprintf(f, string(spec), a.String())
-	case isSigned[T]():
-		fmt.Fprintf(f, string(spec), int64(a.val))
+		return
+	}
+	fmt.Fprintf(f, string(spec), a.native())
+}
+
+// native returns the value converted to the predeclared integer type of T's
+// kind. The result has no methods, so fmt formats it as a plain integer.
+func (a Int[T]) native() interface{} {
+	switch reflect.TypeOf(a.val).Kind() {
+	case reflect.Int:
+		return int(a.val)
+	case reflect.Int8:
+		return int8(a.val)
+	case reflect.Int16:
+		return int16(a.val)
+	case reflect.Int32:
+		return int32(a.val)
+	case reflect.Int64:
+		return int64(a.val)
+	case reflect.Uint:
+		return uint(a.val)
+	case reflect.Uint8:
+		return uint8(a.val)
+	case reflect.Uint16:
+		return uint16(a.val)
+	case reflect.Uint32:
+		return uint32(a.val)
 	default:
-		fmt.Fprintf(f, string(spec), uint64(a.val))
+		return uint64(a.val)
 	}
 }
 
@@ -272,32 +308,37 @@ func (a Int[T]) MarshalJSON() ([]byte, error) {
 // rejection came from the intermediate int64/uint64 decode or from narrowing
 // to T. Other errors (e.g. *json.SyntaxError) are returned unchanged.
 //
-// encoding/json does not add Struct, Field or document Offset context to an
-// error that UnmarshalJSON returns, so UnmarshalTypeError.Offset is relative
-// to data, or 0, and Field is empty.
+// encoding/json does not add the document Offset to an error that
+// UnmarshalJSON returns, so UnmarshalTypeError.Offset is relative to data,
+// or 0. Whether Field is set depends on the Go version: Go 1.26 and earlier
+// set it, and the default encoding/json in Go 1.27 leaves it empty.
 //
 // The `json:",string"` struct tag option has no effect: encoding/json applies
 // it only to string, numeric and bool fields, not to struct types such as
 // Int[T]. Int[T] always encodes as a JSON number and rejects JSON strings.
+//
+// Int[T] cannot be a JSON object key. It does not implement
+// encoding.TextMarshaler, because encoding/json in Go 1.26 and earlier would
+// pass the quoted key to UnmarshalJSON, which rejects JSON strings.
 func (a *Int[T]) UnmarshalJSON(data []byte) error {
 	// Fast path for a canonical JSON integer that fits in T. Any other input,
 	// including null, whitespace and every invalid or out-of-range value,
 	// goes through decodeJSONNumber so results and errors stay identical.
+	// This path does not share scanString: building scanString's error
+	// makes string(data) escape, which costs an allocation per value.
 	if isCanonicalJSONInteger(data) {
+		var value T
+		ok := false
 		if isSigned[T]() {
 			if n, err := strconv.ParseInt(string(data), 10, 64); err == nil {
-				if value, ok := Convert[int64, T](n); ok {
-					a.val = value
-					return nil
-				}
+				value, ok = Convert[int64, T](n)
 			}
-		} else {
-			if n, err := strconv.ParseUint(string(data), 10, 64); err == nil {
-				if value, ok := Convert[uint64, T](n); ok {
-					a.val = value
-					return nil
-				}
-			}
+		} else if n, err := strconv.ParseUint(string(data), 10, 64); err == nil {
+			value, ok = Convert[uint64, T](n)
+		}
+		if ok {
+			a.val = value
+			return nil
 		}
 	}
 	return a.decodeJSONNumber(data)
@@ -360,24 +401,6 @@ func (a *Int[T]) retypeError(err error) error {
 }
 
 // ---------------------------------------------------------------------------
-// Serialization — text
-// ---------------------------------------------------------------------------
-
-// MarshalText implements encoding.TextMarshaler using the decimal form of the
-// underlying value. This lets Int[T] be a JSON object key.
-func (a Int[T]) MarshalText() ([]byte, error) {
-	return []byte(a.String()), nil
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler. It accepts the base-10
-// forms that strconv.ParseInt (signed T) or strconv.ParseUint (unsigned T)
-// accept, and rejects values that do not fit in T. On error the value is
-// unchanged.
-func (a *Int[T]) UnmarshalText(text []byte) error {
-	return a.parseDecimal("parse", string(text))
-}
-
-// ---------------------------------------------------------------------------
 // Serialization — database/sql
 // ---------------------------------------------------------------------------
 
@@ -437,21 +460,19 @@ func (a *Int[T]) Scan(src interface{}) error {
 		a.val = r
 		return nil
 	case []byte:
-		return a.parseDecimal("scan", string(v))
+		return a.scanString(string(v))
 	case string:
-		return a.parseDecimal("scan", v)
+		return a.scanString(v)
 	default:
 		return fmt.Errorf("safeint: unsupported Scan source type %T", src)
 	}
 }
 
-// parseDecimal sets the value from the base-10 string s. op names the caller
-// in the error text ("scan" or "parse"). On error the value is unchanged.
-func (a *Int[T]) parseDecimal(op, s string) error {
+func (a *Int[T]) scanString(s string) error {
 	if isSigned[T]() {
 		i, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			return fmt.Errorf("safeint: cannot %s %q: %w", op, s, err)
+			return fmt.Errorf("safeint: cannot scan %q: %w", s, err)
 		}
 		r, ok := Convert[int64, T](i)
 		if !ok {
@@ -462,7 +483,7 @@ func (a *Int[T]) parseDecimal(op, s string) error {
 	}
 	u, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
-		return fmt.Errorf("safeint: cannot %s %q: %w", op, s, err)
+		return fmt.Errorf("safeint: cannot scan %q: %w", s, err)
 	}
 	r, ok := Convert[uint64, T](u)
 	if !ok {

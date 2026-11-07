@@ -8,7 +8,6 @@ import (
 	"math"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -974,7 +973,9 @@ func TestFormat(t *testing.T) {
 		{"%v", struct{ N Int[uint8] }{New[uint8](9)}, "{9}"},
 		{"%v", New[stringerInt](25), "25"},
 		{"%x", New[formatterInt](255), "ff"},
-		{"%f", New[int64](3), "%!f(int64=3)"},
+		{"%f", New[int8](3), "%!f(int8=3)"},
+		{"%f", New[stringerInt](3), "%!f(int64=3)"},
+		{"%d", New[formatterInt](255), "255"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.format+"_"+fmt.Sprintf("%T", tc.arg), func(t *testing.T) {
@@ -1655,73 +1656,6 @@ func TestJSON_StructField(t *testing.T) {
 			t.Fatalf("expected error for overflow, got nil")
 		}
 	})
-}
-
-func TestJSON_MapKey(t *testing.T) {
-	t.Run("signed_roundtrip", func(t *testing.T) {
-		original := map[Int[int16]]string{New[int16](-3): "a", New[int16](10): "b"}
-		data, err := json.Marshal(original)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := `{"-3":"a","10":"b"}`; string(data) != want {
-			t.Fatalf("Marshal = %s, want %s", data, want)
-		}
-		var decoded map[Int[int16]]string
-		if err := json.Unmarshal(data, &decoded); err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(decoded, original) {
-			t.Fatalf("decoded = %v, want %v", decoded, original)
-		}
-	})
-	t.Run("unsigned_max_roundtrip", func(t *testing.T) {
-		original := map[Int[uint64]]int{New[uint64](math.MaxUint64): 1}
-		data, err := json.Marshal(original)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := `{"18446744073709551615":1}`; string(data) != want {
-			t.Fatalf("Marshal = %s, want %s", data, want)
-		}
-		var decoded map[Int[uint64]]int
-		if err := json.Unmarshal(data, &decoded); err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(decoded, original) {
-			t.Fatalf("decoded = %v, want %v", decoded, original)
-		}
-	})
-	for _, data := range []string{`{"x":1}`, `{"40000":1}`, `{"1.5":1}`} {
-		t.Run("rejects_"+data, func(t *testing.T) {
-			var decoded map[Int[int16]]int
-			err := json.Unmarshal([]byte(data), &decoded)
-			// The error must come from UnmarshalText, not from encoding/json
-			// rejecting the key type.
-			if err == nil || !strings.HasPrefix(err.Error(), "safeint: ") {
-				t.Fatalf("Unmarshal(%s) error = %v, want a safeint key parse error", data, err)
-			}
-		})
-	}
-}
-
-func TestUnmarshalText(t *testing.T) {
-	v := New[int8](7)
-	for _, text := range []string{"128", "-129", "abc", "", "1.5"} {
-		if err := v.UnmarshalText([]byte(text)); err == nil {
-			t.Fatalf("UnmarshalText(%q) = nil error", text)
-		}
-		if v.Val() != 7 {
-			t.Fatalf("UnmarshalText(%q) changed value to %d", text, v.Val())
-		}
-	}
-	if err := v.UnmarshalText([]byte("-128")); err != nil || v.Val() != -128 {
-		t.Fatalf("UnmarshalText(-128) = %v, value %d", err, v.Val())
-	}
-	u := New[uint8](7)
-	if err := u.UnmarshalText([]byte("-1")); err == nil || u.Val() != 7 {
-		t.Fatalf("UnmarshalText(-1) into uint8 = %v, value %d", err, u.Val())
-	}
 }
 
 // ---------------------------------------------------------------------------

@@ -103,13 +103,13 @@ fmt.Sprintf("%x", a) // implements fmt.Formatter: integer verbs work like on T
 
 - **JSON:** `Int[T]` encodes as a JSON number, even when `T` defines custom JSON
   methods. Decoding `null` or invalid input leaves the value unchanged;
-  out-of-range numbers are rejected. `Int[T]` also works as a JSON object key
-  (through `encoding.TextMarshaler` and `encoding.TextUnmarshaler`).
+  out-of-range numbers are rejected. `Int[T]` cannot be a JSON object key.
 - **`json:",string"`:** this struct tag option has no effect on `Int[T]`,
   because `encoding/json` applies it only to string, numeric and bool fields.
   `Int[T]` always encodes as a JSON number and rejects JSON strings.
-- **JSON errors:** `encoding/json` does not add `Field` or document `Offset`
-  context to errors that `UnmarshalJSON` returns.
+- **JSON errors:** `encoding/json` does not add the document `Offset` to errors
+  that `UnmarshalJSON` returns. Go 1.26 and earlier set `Field`; the default
+  `encoding/json` in Go 1.27 leaves it empty.
 - **SQL:** `Scan(nil)` (SQL `NULL`) sets the value to 0, so `NULL` and 0 cannot be
   told apart. To keep `NULL` distinct, scan into `sql.Null[safeint.Int[T]]`
   (Go 1.22+) or `sql.NullInt64`.
