@@ -253,6 +253,7 @@ func TestPowOverflow(t *testing.T) {
 	}{
 		{"2^7", New[uint8](2), 7, 128, true},
 		{"2^8_overflow", New[uint8](2), 8, 0, false},
+		{"3^6_overflow_wraps", New[uint8](3), 6, 217, false}, // 729 mod 256
 		{"3^5", New[uint8](3), 5, 243, true},
 		{"anything^0", New[uint8](255), 0, 1, true},
 		{"0^0", New[uint8](0), 0, 1, true},
@@ -292,7 +293,8 @@ func TestLshOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
+			// The value on other overflows is not specified (see Lsh).
+			if (ok || tc.n >= 8) && got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -530,6 +532,26 @@ func TestCmp(t *testing.T) {
 		{"negative_less", New[int64](-5), New[int64](3), -1},
 		{"negative_greater", New[int64](3), New[int64](-5), 1},
 		{"both_negative", New[int64](-10), New[int64](-5), -1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.a.Cmp(tc.b)
+			if got != tc.want {
+				t.Fatalf("Cmp = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCmpUnsigned(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b Int[uint8]
+		want int
+	}{
+		{"less", New[uint8](0), New[uint8](255), -1},
+		{"equal", New[uint8](128), New[uint8](128), 0},
+		{"greater", New[uint8](255), New[uint8](0), 1},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

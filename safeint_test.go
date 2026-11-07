@@ -310,25 +310,25 @@ func TestNegSigned(t *testing.T) {
 		want   int64
 		wantOk bool
 	}{
-		{"int8/MinInt8", func() (int64, bool) { r, ok := Neg[int8](math.MinInt8); return int64(r), ok }, 0, false},
+		{"int8/MinInt8", func() (int64, bool) { r, ok := Neg[int8](math.MinInt8); return int64(r), ok }, math.MinInt8, false},
 		{"int8/-1", func() (int64, bool) { r, ok := Neg[int8](-1); return int64(r), ok }, 1, true},
 		{"int8/0", func() (int64, bool) { r, ok := Neg[int8](0); return int64(r), ok }, 0, true},
 		{"int8/1", func() (int64, bool) { r, ok := Neg[int8](1); return int64(r), ok }, -1, true},
 		{"int8/MaxInt8", func() (int64, bool) { r, ok := Neg[int8](math.MaxInt8); return int64(r), ok }, -math.MaxInt8, true},
 
-		{"int16/MinInt16", func() (int64, bool) { r, ok := Neg[int16](math.MinInt16); return int64(r), ok }, 0, false},
+		{"int16/MinInt16", func() (int64, bool) { r, ok := Neg[int16](math.MinInt16); return int64(r), ok }, math.MinInt16, false},
 		{"int16/-1", func() (int64, bool) { r, ok := Neg[int16](-1); return int64(r), ok }, 1, true},
 		{"int16/0", func() (int64, bool) { r, ok := Neg[int16](0); return int64(r), ok }, 0, true},
 		{"int16/1", func() (int64, bool) { r, ok := Neg[int16](1); return int64(r), ok }, -1, true},
 		{"int16/MaxInt16", func() (int64, bool) { r, ok := Neg[int16](math.MaxInt16); return int64(r), ok }, -math.MaxInt16, true},
 
-		{"int32/MinInt32", func() (int64, bool) { r, ok := Neg[int32](math.MinInt32); return int64(r), ok }, 0, false},
+		{"int32/MinInt32", func() (int64, bool) { r, ok := Neg[int32](math.MinInt32); return int64(r), ok }, math.MinInt32, false},
 		{"int32/-1", func() (int64, bool) { r, ok := Neg[int32](-1); return int64(r), ok }, 1, true},
 		{"int32/0", func() (int64, bool) { r, ok := Neg[int32](0); return int64(r), ok }, 0, true},
 		{"int32/1", func() (int64, bool) { r, ok := Neg[int32](1); return int64(r), ok }, -1, true},
 		{"int32/MaxInt32", func() (int64, bool) { r, ok := Neg[int32](math.MaxInt32); return int64(r), ok }, -math.MaxInt32, true},
 
-		{"int64/MinInt64", func() (int64, bool) { r, ok := Neg[int64](math.MinInt64); return r, ok }, 0, false},
+		{"int64/MinInt64", func() (int64, bool) { r, ok := Neg[int64](math.MinInt64); return r, ok }, math.MinInt64, false},
 		{"int64/-1", func() (int64, bool) { r, ok := Neg[int64](-1); return r, ok }, 1, true},
 		{"int64/0", func() (int64, bool) { r, ok := Neg[int64](0); return r, ok }, 0, true},
 		{"int64/1", func() (int64, bool) { r, ok := Neg[int64](1); return r, ok }, -1, true},
@@ -340,7 +340,7 @@ func TestNegSigned(t *testing.T) {
 			if gotOk != tc.wantOk {
 				t.Errorf("ok=%v, want %v", gotOk, tc.wantOk)
 			}
-			if gotOk && got != tc.want {
+			if got != tc.want {
 				t.Errorf("got=%d, want=%d", got, tc.want)
 			}
 		})
@@ -424,23 +424,23 @@ func TestAbsSigned(t *testing.T) {
 		want   int64
 		wantOk bool
 	}{
-		{"int8/MinInt8", func() (int64, bool) { r, ok := Abs[int8](math.MinInt8); return int64(r), ok }, 0, false},
+		{"int8/MinInt8", func() (int64, bool) { r, ok := Abs[int8](math.MinInt8); return int64(r), ok }, math.MinInt8, false},
 		{"int8/-1", func() (int64, bool) { r, ok := Abs[int8](-1); return int64(r), ok }, 1, true},
 		{"int8/0", func() (int64, bool) { r, ok := Abs[int8](0); return int64(r), ok }, 0, true},
 		{"int8/1", func() (int64, bool) { r, ok := Abs[int8](1); return int64(r), ok }, 1, true},
 		{"int8/MaxInt8", func() (int64, bool) { r, ok := Abs[int8](math.MaxInt8); return int64(r), ok }, math.MaxInt8, true},
 
-		{"int16/MinInt16", func() (int64, bool) { r, ok := Abs[int16](math.MinInt16); return int64(r), ok }, 0, false},
+		{"int16/MinInt16", func() (int64, bool) { r, ok := Abs[int16](math.MinInt16); return int64(r), ok }, math.MinInt16, false},
 		{"int16/-1", func() (int64, bool) { r, ok := Abs[int16](-1); return int64(r), ok }, 1, true},
 		{"int16/0", func() (int64, bool) { r, ok := Abs[int16](0); return int64(r), ok }, 0, true},
 		{"int16/MaxInt16", func() (int64, bool) { r, ok := Abs[int16](math.MaxInt16); return int64(r), ok }, math.MaxInt16, true},
 
-		{"int32/MinInt32", func() (int64, bool) { r, ok := Abs[int32](math.MinInt32); return int64(r), ok }, 0, false},
+		{"int32/MinInt32", func() (int64, bool) { r, ok := Abs[int32](math.MinInt32); return int64(r), ok }, math.MinInt32, false},
 		{"int32/-1", func() (int64, bool) { r, ok := Abs[int32](-1); return int64(r), ok }, 1, true},
 		{"int32/0", func() (int64, bool) { r, ok := Abs[int32](0); return int64(r), ok }, 0, true},
 		{"int32/MaxInt32", func() (int64, bool) { r, ok := Abs[int32](math.MaxInt32); return int64(r), ok }, math.MaxInt32, true},
 
-		{"int64/MinInt64", func() (int64, bool) { r, ok := Abs[int64](math.MinInt64); return r, ok }, 0, false},
+		{"int64/MinInt64", func() (int64, bool) { r, ok := Abs[int64](math.MinInt64); return r, ok }, math.MinInt64, false},
 		{"int64/-1", func() (int64, bool) { r, ok := Abs[int64](-1); return r, ok }, 1, true},
 		{"int64/0", func() (int64, bool) { r, ok := Abs[int64](0); return r, ok }, 0, true},
 		{"int64/1", func() (int64, bool) { r, ok := Abs[int64](1); return r, ok }, 1, true},
@@ -452,7 +452,7 @@ func TestAbsSigned(t *testing.T) {
 			if gotOk != tc.wantOk {
 				t.Errorf("ok=%v, want %v", gotOk, tc.wantOk)
 			}
-			if gotOk && got != tc.want {
+			if got != tc.want {
 				t.Errorf("got=%d, want=%d", got, tc.want)
 			}
 		})
