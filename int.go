@@ -229,25 +229,12 @@ func (a Int[T]) Format(f fmt.State, verb rune) {
 		io.WriteString(f, a.String())
 		return
 	}
-	spec := []byte{'%'}
-	for _, flag := range "+-# 0" {
-		if f.Flag(int(flag)) {
-			spec = append(spec, byte(flag))
-		}
-	}
-	if w, ok := f.Width(); ok {
-		spec = strconv.AppendInt(spec, int64(w), 10)
-	}
-	if p, ok := f.Precision(); ok {
-		spec = append(spec, '.')
-		spec = strconv.AppendInt(spec, int64(p), 10)
-	}
-	spec = append(spec, string(verb)...)
+	spec := fmt.FormatString(f, verb)
 	if verb == 's' || verb == 'q' {
-		fmt.Fprintf(f, string(spec), a.String())
+		fmt.Fprintf(f, spec, a.String())
 		return
 	}
-	fmt.Fprintf(f, string(spec), a.native())
+	fmt.Fprintf(f, spec, a.native())
 }
 
 // native returns the value converted to the predeclared integer type of T's
@@ -325,8 +312,8 @@ func (a *Int[T]) UnmarshalJSON(data []byte) error {
 	// including null, whitespace and every invalid or out-of-range value,
 	// goes through decodeJSONNumber so results and errors stay identical.
 	// This path does not share scanString: building scanString's error
-	// makes string(data) escape. Without that, strconv in Go 1.20+ keeps
-	// string(data) on the stack, so this path does not allocate.
+	// makes string(data) escape. Without that, strconv keeps string(data)
+	// on the stack, so this path does not allocate.
 	if isCanonicalJSONInteger(data) {
 		var value T
 		ok := false
@@ -422,8 +409,7 @@ func (a Int[T]) Value() (driver.Value, error) {
 // A nil src (SQL NULL) sets the value to 0 and returns nil, so NULL and 0
 // cannot be told apart after Scan. This differs from UnmarshalJSON, which
 // leaves the value unchanged on null. To keep NULL distinct, use
-// sql.Null[Int[T]] (Go 1.24+; on Go 1.22 and 1.23 its Value method returns
-// the Int[T] itself, so only scanning works) or sql.NullInt64.
+// sql.Null[Int[T]] or sql.NullInt64.
 func (a *Int[T]) Scan(src interface{}) error {
 	if src == nil {
 		a.val = 0

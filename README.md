@@ -10,7 +10,7 @@ Go's native integer operations silently wrap on overflow. `safeint` makes overfl
 go get github.com/howardsun-tw/safeint
 ```
 
-Requires Go 1.18+ (generics). Tested on Go 1.18 through 1.27.
+Requires Go 1.24+. Tested on Go 1.24 through 1.27.
 
 ## API Overview
 
@@ -111,8 +111,8 @@ fmt.Sprintf("%x", a) // implements fmt.Formatter: integer verbs work like on T
   that `UnmarshalJSON` returns. Go 1.26 and earlier set `Field`; the default
   `encoding/json` in Go 1.27 leaves it empty.
 - **SQL:** `Scan(nil)` (SQL `NULL`) sets the value to 0, so `NULL` and 0 cannot be
-  told apart. To keep `NULL` distinct, use `sql.Null[safeint.Int[T]]` (Go 1.24+;
-  on Go 1.22 and 1.23 it works for scanning only) or `sql.NullInt64`.
+  told apart. To keep `NULL` distinct, use `sql.Null[safeint.Int[T]]` or
+  `sql.NullInt64`.
 
 **Cross-type conversion:**
 
@@ -209,7 +209,7 @@ go test ./...
 
 ### Go Version Compatibility
 
-CI tests against every Go release from 1.18 to 1.27. The minimum version is Go 1.18 (the release that introduced generics).
+CI tests against every Go release from 1.24 to 1.27. The minimum version is Go 1.24.
 
 ## Security Note
 
@@ -229,4 +229,4 @@ MIT
 ## Development toolchain
 
 Use Go 1.27.3 for development (`.go-version`) and the Go 1.27 CI lane.
-The library retains its Go 1.18 minimum and older-version CI coverage.
+The library keeps its Go 1.24 minimum and older-version CI coverage.

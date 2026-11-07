@@ -1,6 +1,7 @@
 package safeint
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -2363,5 +2364,21 @@ func checkJSONFastPath[T Integer](t *testing.T, data []byte) {
 	if got != want || !reflect.DeepEqual(gotErr, wantErr) {
 		t.Fatalf("%T input %q: UnmarshalJSON = (%d, %v), decodeJSONNumber = (%d, %v)",
 			got, data, got.Val(), gotErr, want.Val(), wantErr)
+	}
+}
+
+// TestSQL_NullRoundTrip guards the documented way to keep SQL NULL distinct:
+// sql.Null[Int[T]] must both write (through Int[T].Value) and scan.
+func TestSQL_NullRoundTrip(t *testing.T) {
+	v, err := sql.Null[Int[int64]]{V: New[int64](5), Valid: true}.Value()
+	if err != nil || v != int64(5) {
+		t.Fatalf("Value = (%#v, %v), want (int64(5), nil)", v, err)
+	}
+	var n sql.Null[Int[int64]]
+	if err := n.Scan(int64(7)); err != nil || !n.Valid || n.V.Val() != 7 {
+		t.Fatalf("Scan(7) = %v, got %+v", err, n)
+	}
+	if err := n.Scan(nil); err != nil || n.Valid {
+		t.Fatalf("Scan(nil) = %v, got %+v", err, n)
 	}
 }
