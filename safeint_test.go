@@ -5,369 +5,182 @@ import (
 	"math"
 	"math/big"
 	"testing"
+	"unsafe"
 )
 
 // ---------------------------------------------------------------------------
 // A. Exhaustive 8-bit tests
 // ---------------------------------------------------------------------------
 
-// refAdd computes a+b in wide arithmetic and checks if it fits in [lo, hi].
-func refAdd64(a, b, lo, hi int64) (int64, bool) {
-	r := a + b
-	return r, r >= lo && r <= hi
+// Exponents and shift counts for the 8-bit Pow and Lsh checks. They include
+// values where the result first overflows (8, 16) and values of at least 64,
+// which run the whole binary-exponentiation loop.
+var (
+	exhaustivePowExps   = []uint{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 31, 32, 63, 64, 65, 1000, math.MaxUint}
+	exhaustiveLshShifts = []uint{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 63, 64, 65, math.MaxUint}
+)
+
+func TestExhaustive8Bit(t *testing.T) {
+	t.Run("int8", exhaustive8[int8])
+	t.Run("uint8", exhaustive8[uint8])
 }
 
-func refSub64(a, b, lo, hi int64) (int64, bool) {
-	r := a - b
-	return r, r >= lo && r <= hi
-}
-
-func refMul64(a, b, lo, hi int64) (int64, bool) {
-	r := big.NewInt(a)
-	r.Mul(r, big.NewInt(b))
-	if r.Cmp(big.NewInt(lo)) < 0 || r.Cmp(big.NewInt(hi)) > 0 {
-		low := r.Int64()
-		return low, false
+// exhaustive8 checks every operation for every operand of the 8-bit type T
+// against exact int64 arithmetic, and math/big for Pow's wrapped value. On
+// failure it expects each function's documented result: Add, Sub, Mul, Neg,
+// Abs and Pow return the wrapped value; Div, DivMod, Mod, MulDiv and MulMod
+// return zero; Lsh returns 0 when the shift count is at least 8. The value
+// that Lsh returns for other overflows, and that Convert returns on failure,
+// is not specified, so only ok is checked there.
+func exhaustive8[T int8 | uint8](t *testing.T) {
+	lo, hi := int64(0), int64(math.MaxUint8)
+	if T(0)-1 < 0 {
+		lo, hi = math.MinInt8, math.MaxInt8
 	}
-	return r.Int64(), true
-}
-
-func refDiv64(a, b, lo, hi int64) (int64, bool) {
-	if b == 0 {
+	// want returns (exact, true) when exact fits in T. Otherwise it returns
+	// exact wrapped to T, or zero, with false.
+	want := func(exact int64, wrap bool) (T, bool) {
+		if exact >= lo && exact <= hi {
+			return T(exact), true
+		}
+		if wrap {
+			return T(exact), false
+		}
 		return 0, false
 	}
-	r := big.NewInt(a)
-	r.Quo(r, big.NewInt(b))
-	if r.Cmp(big.NewInt(lo)) < 0 || r.Cmp(big.NewInt(hi)) > 0 {
-		return 0, false
-	}
-	return r.Int64(), true
-}
-
-func refMod64(a, b int64) (int64, bool) {
-	if b == 0 {
-		return 0, false
-	}
-	r := big.NewInt(a)
-	r.Rem(r, big.NewInt(b))
-	return r.Int64(), true
-}
-
-func TestExhaustiveInt8Add(t *testing.T) {
-	errors := 0
-	for ai := -128; ai <= 127; ai++ {
-		for bi := -128; bi <= 127; bi++ {
-			a, b := int8(ai), int8(bi)
-			got, gotOk := Add(a, b)
-			ref, refOk := refAdd64(int64(a), int64(b), math.MinInt8, math.MaxInt8)
-			wantOk := refOk
-			var want int8
-			if wantOk {
-				want = int8(ref)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Add(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Add(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
+	expect := func(op string, args [3]int64, got T, ok bool, w T, wok bool) {
+		if got != w || ok != wok {
+			t.Helper() // only on failure: Helper is too slow for the hot loop
+			t.Fatalf("%s%v = (%d, %v), want (%d, %v)", op, args, got, ok, w, wok)
 		}
 	}
-}
 
-func TestExhaustiveInt8Sub(t *testing.T) {
-	errors := 0
-	for ai := -128; ai <= 127; ai++ {
-		for bi := -128; bi <= 127; bi++ {
-			a, b := int8(ai), int8(bi)
-			got, gotOk := Sub(a, b)
-			ref, refOk := refSub64(int64(a), int64(b), math.MinInt8, math.MaxInt8)
-			wantOk := refOk
-			var want int8
-			if wantOk {
-				want = int8(ref)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Sub(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Sub(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
+	checkConvert8[T, int8](t)
+	checkConvert8[T, uint8](t)
+	checkConvert8[T, int16](t)
+	checkConvert8[T, uint16](t)
+	checkConvert8[T, int32](t)
+	checkConvert8[T, uint32](t)
+	checkConvert8[T, int64](t)
+	checkConvert8[T, uint64](t)
+	checkConvert8[T, int](t)
+	checkConvert8[T, uint](t)
+
+	for i := range 256 {
+		a := T(i)
+		x := int64(a)
+
+		r, ok := Neg(a)
+		w, wok := want(-x, true)
+		expect("Neg", [3]int64{x}, r, ok, w, wok)
+
+		r, ok = Abs(a)
+		w, wok = want(max(x, -x), true)
+		expect("Abs", [3]int64{x}, r, ok, w, wok)
+
+		for _, e := range exhaustivePowExps {
+			r, ok = Pow(a, e)
+			wrapped := new(big.Int).Exp(big.NewInt(x&0xFF), new(big.Int).SetUint64(uint64(e)), big.NewInt(256))
+			expect("Pow", [3]int64{x, int64(e)}, r, ok, T(wrapped.Int64()), powFits(x, e, lo, hi))
 		}
-	}
-}
 
-func TestExhaustiveInt8Mul(t *testing.T) {
-	errors := 0
-	for ai := -128; ai <= 127; ai++ {
-		for bi := -128; bi <= 127; bi++ {
-			a, b := int8(ai), int8(bi)
-			got, gotOk := Mul(a, b)
-			ref, refOk := refMul64(int64(a), int64(b), math.MinInt8, math.MaxInt8)
-			wantOk := refOk
-			var want int8
-			if wantOk {
-				want = int8(ref)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Mul(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Mul(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
-	}
-}
-
-func TestExhaustiveInt8Div(t *testing.T) {
-	errors := 0
-	for ai := -128; ai <= 127; ai++ {
-		for bi := -128; bi <= 127; bi++ {
-			a, b := int8(ai), int8(bi)
-			got, gotOk := Div(a, b)
-			ref, refOk := refDiv64(int64(a), int64(b), math.MinInt8, math.MaxInt8)
-			wantOk := refOk
-			var want int8
-			if wantOk {
-				want = int8(ref)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Div(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Div(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
-	}
-}
-
-func TestExhaustiveInt8DivMod(t *testing.T) {
-	errors := 0
-	for ai := -128; ai <= 127; ai++ {
-		for bi := -128; bi <= 127; bi++ {
-			a, b := int8(ai), int8(bi)
-			gotQ, gotR, gotOk := DivMod(a, b)
-			refQ, refQOk := refDiv64(int64(a), int64(b), math.MinInt8, math.MaxInt8)
-			refR, _ := refMod64(int64(a), int64(b))
-
-			if gotOk != refQOk {
-				t.Errorf("DivMod(%d, %d): ok=%v, want ok=%v", a, b, gotOk, refQOk)
-				errors++
-			} else if gotOk {
-				wantQ := int8(refQ)
-				wantR := int8(refR)
-				if gotQ != wantQ || gotR != wantR {
-					t.Errorf("DivMod(%d, %d): got=(%d, %d), want=(%d, %d)", a, b, gotQ, gotR, wantQ, wantR)
-					errors++
+		for _, n := range exhaustiveLshShifts {
+			r, ok = Lsh(a, n)
+			switch {
+			case a == 0:
+				expect("Lsh", [3]int64{x, int64(n)}, r, ok, 0, true)
+			case n >= 8:
+				expect("Lsh", [3]int64{x, int64(n)}, r, ok, 0, false)
+			default:
+				if w, wok = want(x<<n, false); wok {
+					expect("Lsh", [3]int64{x, int64(n)}, r, ok, w, true)
+				} else if ok {
+					t.Fatalf("Lsh(%d, %d) = (%d, true), want ok == false", x, n, r)
 				}
 			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
 		}
-	}
-}
 
-func TestExhaustiveInt8Mod(t *testing.T) {
-	errors := 0
-	for ai := -128; ai <= 127; ai++ {
-		for bi := -128; bi <= 127; bi++ {
-			a, b := int8(ai), int8(bi)
-			got, gotOk := Mod(a, b)
-			ref, refOk := refMod64(int64(a), int64(b))
-			wantOk := refOk
-			var want int8
-			if wantOk {
-				want = int8(ref)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Mod(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Mod(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
-	}
-}
+		for j := range 256 {
+			b := T(j)
+			y := int64(b)
 
-func TestExhaustiveUint8Add(t *testing.T) {
-	errors := 0
-	for ai := 0; ai <= 255; ai++ {
-		for bi := 0; bi <= 255; bi++ {
-			a, b := uint8(ai), uint8(bi)
-			got, gotOk := Add(a, b)
-			sum := uint64(a) + uint64(b)
-			wantOk := sum <= math.MaxUint8
-			var want uint8
-			if wantOk {
-				want = uint8(sum)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Add(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Add(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
-	}
-}
+			r, ok = Add(a, b)
+			w, wok = want(x+y, true)
+			expect("Add", [3]int64{x, y}, r, ok, w, wok)
 
-func TestExhaustiveUint8Sub(t *testing.T) {
-	errors := 0
-	for ai := 0; ai <= 255; ai++ {
-		for bi := 0; bi <= 255; bi++ {
-			a, b := uint8(ai), uint8(bi)
-			got, gotOk := Sub(a, b)
-			wantOk := a >= b
-			var want uint8
-			if wantOk {
-				want = a - b
-			}
-			if gotOk != wantOk {
-				t.Errorf("Sub(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Sub(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
-	}
-}
+			r, ok = Sub(a, b)
+			w, wok = want(x-y, true)
+			expect("Sub", [3]int64{x, y}, r, ok, w, wok)
 
-func TestExhaustiveUint8Mul(t *testing.T) {
-	errors := 0
-	for ai := 0; ai <= 255; ai++ {
-		for bi := 0; bi <= 255; bi++ {
-			a, b := uint8(ai), uint8(bi)
-			got, gotOk := Mul(a, b)
-			prod := uint64(a) * uint64(b)
-			wantOk := prod <= math.MaxUint8
-			var want uint8
-			if wantOk {
-				want = uint8(prod)
-			}
-			if gotOk != wantOk {
-				t.Errorf("Mul(%d, %d): ok=%v, want ok=%v", a, b, gotOk, wantOk)
-				errors++
-			} else if gotOk && got != want {
-				t.Errorf("Mul(%d, %d): got=%d, want=%d", a, b, got, want)
-				errors++
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
-	}
-}
+			r, ok = Mul(a, b)
+			w, wok = want(x*y, true)
+			expect("Mul", [3]int64{x, y}, r, ok, w, wok)
 
-func TestExhaustiveUint8Div(t *testing.T) {
-	errors := 0
-	for ai := 0; ai <= 255; ai++ {
-		for bi := 0; bi <= 255; bi++ {
-			a, b := uint8(ai), uint8(bi)
-			got, gotOk := Div(a, b)
-			if b == 0 {
-				if gotOk {
-					t.Errorf("Div(%d, 0): ok=true, want ok=false", a)
-					errors++
+			var q, rem T
+			var qok bool
+			if y != 0 {
+				q, qok = want(x/y, false)
+				rem = T(x % y)
+			}
+			r, ok = Div(a, b)
+			expect("Div", [3]int64{x, y}, r, ok, q, qok)
+
+			r, ok = Mod(a, b)
+			expect("Mod", [3]int64{x, y}, r, ok, rem, y != 0)
+
+			if !qok {
+				rem = 0
+			}
+			gq, gr, ok := DivMod(a, b)
+			if gq != q || gr != rem || ok != qok {
+				t.Fatalf("DivMod(%d, %d) = (%d, %d, %v), want (%d, %d, %v)", x, y, gq, gr, ok, q, rem, qok)
+			}
+
+			for k := range 256 {
+				c := T(k)
+				z := int64(c)
+				var dw, mw T
+				var dok bool
+				if z != 0 {
+					dw, dok = want(x*y/z, false)
+					mw = T(x * y % z)
 				}
-			} else {
-				want := a / b
-				if !gotOk {
-					t.Errorf("Div(%d, %d): ok=false, want ok=true", a, b)
-					errors++
-				} else if got != want {
-					t.Errorf("Div(%d, %d): got=%d, want=%d", a, b, got, want)
-					errors++
-				}
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
+				r, ok = MulDiv(a, b, c)
+				expect("MulDiv", [3]int64{x, y, z}, r, ok, dw, dok)
+				r, ok = MulMod(a, b, c)
+				expect("MulMod", [3]int64{x, y, z}, r, ok, mw, z != 0)
 			}
 		}
 	}
 }
 
-func TestExhaustiveUint8DivMod(t *testing.T) {
-	errors := 0
-	for ai := 0; ai <= 255; ai++ {
-		for bi := 0; bi <= 255; bi++ {
-			a, b := uint8(ai), uint8(bi)
-			gotQ, gotR, gotOk := DivMod(a, b)
-			if b == 0 {
-				if gotOk {
-					t.Errorf("DivMod(%d, 0): ok=true, want ok=false", a)
-					errors++
-				}
-			} else {
-				wantQ := a / b
-				wantR := a % b
-				if !gotOk {
-					t.Errorf("DivMod(%d, %d): ok=false, want ok=true", a, b)
-					errors++
-				} else if gotQ != wantQ || gotR != wantR {
-					t.Errorf("DivMod(%d, %d): got=(%d,%d), want=(%d,%d)", a, b, gotQ, gotR, wantQ, wantR)
-					errors++
-				}
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
-		}
+// powFits reports whether x^e lies in [lo, hi] for an 8-bit x. Powers of
+// 0, 1 and -1 never grow, and for |x| >= 2 every e >= 8 exceeds 8 bits.
+func powFits(x int64, e uint, lo, hi int64) bool {
+	switch {
+	case x >= -1 && x <= 1:
+		return true
+	case e >= 8:
+		return false
 	}
+	p := int64(1)
+	for range e {
+		p *= x
+	}
+	return p >= lo && p <= hi
 }
 
-func TestExhaustiveUint8Mod(t *testing.T) {
-	errors := 0
-	for ai := 0; ai <= 255; ai++ {
-		for bi := 0; bi <= 255; bi++ {
-			a, b := uint8(ai), uint8(bi)
-			got, gotOk := Mod(a, b)
-			if b == 0 {
-				if gotOk {
-					t.Errorf("Mod(%d, 0): ok=true, want ok=false", a)
-					errors++
-				}
-			} else {
-				want := a % b
-				if !gotOk {
-					t.Errorf("Mod(%d, %d): ok=false, want ok=true", a, b)
-					errors++
-				} else if got != want {
-					t.Errorf("Mod(%d, %d): got=%d, want=%d", a, b, got, want)
-					errors++
-				}
-			}
-			if errors >= 10 {
-				t.Fatalf("too many errors, stopping")
-			}
+// checkConvert8 checks Convert from every value of the 8-bit type T to U.
+func checkConvert8[T int8 | uint8, U Integer](t *testing.T) {
+	t.Helper()
+	lo, hi := boundsOf[U]()
+	for i := range 256 {
+		a := T(i)
+		exact := big.NewInt(int64(a))
+		got, ok := Convert[T, U](a)
+		wok := exact.Cmp(lo) >= 0 && exact.Cmp(hi) <= 0
+		if ok != wok || (ok && toBig(got).Cmp(exact) != 0) {
+			t.Fatalf("Convert[%T, %T](%d) = (%d, %v), want ok == %v", a, got, a, got, ok, wok)
 		}
 	}
 }
@@ -376,288 +189,114 @@ func TestExhaustiveUint8Mod(t *testing.T) {
 // B. Boundary value pair tests
 // ---------------------------------------------------------------------------
 
-// Helper: check a binary op using big.Int as reference for signed types.
-func checkSignedOp[T Signed](t *testing.T, opName string, op func(T, T) (T, bool), a, b T, lo, hi *big.Int) {
+// boundsOf returns the minimum and maximum values of T.
+func boundsOf[T Integer]() (lo, hi *big.Int) {
+	bits := uint(unsafe.Sizeof(T(0))) * 8
+	one := big.NewInt(1)
+	if T(0)-1 < 0 {
+		hi = new(big.Int).Sub(new(big.Int).Lsh(one, bits-1), one)
+		lo = new(big.Int).Neg(new(big.Int).Lsh(one, bits-1))
+		return lo, hi
+	}
+	return new(big.Int), new(big.Int).Sub(new(big.Int).Lsh(one, bits), one)
+}
+
+func toBig[T Integer](v T) *big.Int {
+	if v < 0 {
+		return big.NewInt(int64(v))
+	}
+	return new(big.Int).SetUint64(uint64(v))
+}
+
+// wrapBig returns v modulo 2^64, converted to T. This is the two's
+// complement value that native arithmetic produces.
+func wrapBig[T Integer](v *big.Int) T {
+	return T(new(big.Int).And(v, new(big.Int).SetUint64(math.MaxUint64)).Uint64())
+}
+
+// checkBinaryOp compares op(a, b) with exact math/big arithmetic. In range
+// it wants (exact, true). Out of range, Add, Sub and Mul want the wrapped
+// result and Div wants 0, all with false.
+func checkBinaryOp[T Integer](t *testing.T, opName string, op func(T, T) (T, bool), a, b T) {
 	t.Helper()
-	got, gotOk := op(a, b)
-	var ref *big.Int
-	switch opName {
-	case "Add":
-		ref = new(big.Int).Add(big.NewInt(int64(a)), big.NewInt(int64(b)))
-	case "Sub":
-		ref = new(big.Int).Sub(big.NewInt(int64(a)), big.NewInt(int64(b)))
-	case "Mul":
-		ref = new(big.Int).Mul(big.NewInt(int64(a)), big.NewInt(int64(b)))
-	case "Div":
-		if b == 0 {
-			if gotOk {
-				t.Errorf("%s(%d, %d): ok=true, want false (div by zero)", opName, a, b)
+	got, ok := op(a, b)
+	var want T
+	var wantOk bool
+	ba, bb := toBig(a), toBig(b)
+	if opName == "Div" {
+		if b != 0 {
+			exact := new(big.Int).Quo(ba, bb)
+			lo, hi := boundsOf[T]()
+			if exact.Cmp(lo) >= 0 && exact.Cmp(hi) <= 0 {
+				want, wantOk = wrapBig[T](exact), true
 			}
-			return
 		}
-		ref = new(big.Int).Quo(big.NewInt(int64(a)), big.NewInt(int64(b)))
-	default:
-		t.Fatalf("unknown op: %s", opName)
-		return
-	}
-	wantOk := ref.Cmp(lo) >= 0 && ref.Cmp(hi) <= 0
-	if gotOk != wantOk {
-		t.Errorf("%s(%d, %d): ok=%v, want ok=%v (ref=%s)", opName, a, b, gotOk, wantOk, ref)
-	} else if gotOk {
-		want := T(ref.Int64())
-		if got != want {
-			t.Errorf("%s(%d, %d): got=%d, want=%d", opName, a, b, got, want)
-		}
-	}
-}
-
-// checkUnsignedOp uses big.Int as reference for unsigned types.
-func checkUnsignedOp[T Unsigned](t *testing.T, opName string, op func(T, T) (T, bool), a, b T, max *big.Int) {
-	t.Helper()
-	ba := new(big.Int).SetUint64(uint64(a))
-	bb := new(big.Int).SetUint64(uint64(b))
-	var ref *big.Int
-	switch opName {
-	case "Add":
-		ref = new(big.Int).Add(ba, bb)
-	case "Sub":
-		ref = new(big.Int).Sub(ba, bb)
-	case "Mul":
-		ref = new(big.Int).Mul(ba, bb)
-	case "Div":
-		if b == 0 {
-			got, gotOk := op(a, b)
-			_ = got
-			if gotOk {
-				t.Errorf("%s(%d, %d): ok=true, want false (div by zero)", opName, a, b)
-			}
-			return
-		}
-		ref = new(big.Int).Quo(ba, bb)
-	default:
-		t.Fatalf("unknown op: %s", opName)
-		return
-	}
-	got, gotOk := op(a, b)
-	wantOk := ref.Sign() >= 0 && ref.Cmp(max) <= 0
-	if gotOk != wantOk {
-		t.Errorf("%s(%d, %d): ok=%v, want ok=%v (ref=%s)", opName, a, b, gotOk, wantOk, ref)
-	} else if gotOk {
-		want := T(ref.Uint64())
-		if got != want {
-			t.Errorf("%s(%d, %d): got=%d, want=%d", opName, a, b, got, want)
-		}
-	}
-}
-
-func TestBoundaryInt16(t *testing.T) {
-	const minV, maxV = math.MinInt16, math.MaxInt16
-	lo := big.NewInt(minV)
-	hi := big.NewInt(maxV)
-	pairs := [][2]int16{
-		{minV, minV}, {minV, minV + 1}, {minV, -1}, {minV, 0}, {minV, 1}, {minV, maxV - 1}, {minV, maxV},
-		{-1, -1}, {-1, 0}, {-1, 1}, {-1, maxV},
-		{0, 0}, {0, 1}, {0, maxV},
-		{1, 1}, {1, maxV - 1}, {1, maxV},
-		{maxV - 1, maxV}, {maxV, maxV},
-	}
-	ops := []struct {
-		name string
-		fn   func(int16, int16) (int16, bool)
-	}{
-		{"Add", Add[int16]}, {"Sub", Sub[int16]}, {"Mul", Mul[int16]}, {"Div", Div[int16]},
-	}
-	for _, op := range ops {
-		for _, p := range pairs {
-			t.Run(fmt.Sprintf("%s/%d,%d", op.name, p[0], p[1]), func(t *testing.T) {
-				checkSignedOp(t, op.name, op.fn, p[0], p[1], lo, hi)
-			})
-		}
-	}
-}
-
-func TestBoundaryInt32(t *testing.T) {
-	const minV, maxV = math.MinInt32, math.MaxInt32
-	lo := big.NewInt(minV)
-	hi := big.NewInt(maxV)
-	pairs := [][2]int32{
-		{minV, minV}, {minV, minV + 1}, {minV, -1}, {minV, 0}, {minV, 1}, {minV, maxV - 1}, {minV, maxV},
-		{-1, -1}, {-1, 0}, {-1, 1}, {-1, maxV},
-		{0, 0}, {0, 1}, {0, maxV},
-		{1, 1}, {1, maxV - 1}, {1, maxV},
-		{maxV - 1, maxV}, {maxV, maxV},
-	}
-	ops := []struct {
-		name string
-		fn   func(int32, int32) (int32, bool)
-	}{
-		{"Add", Add[int32]}, {"Sub", Sub[int32]}, {"Mul", Mul[int32]}, {"Div", Div[int32]},
-	}
-	for _, op := range ops {
-		for _, p := range pairs {
-			t.Run(fmt.Sprintf("%s/%d,%d", op.name, p[0], p[1]), func(t *testing.T) {
-				checkSignedOp(t, op.name, op.fn, p[0], p[1], lo, hi)
-			})
-		}
-	}
-}
-
-func TestBoundaryInt64(t *testing.T) {
-	const minV, maxV = math.MinInt64, math.MaxInt64
-	lo := new(big.Int).SetInt64(minV)
-	hi := new(big.Int).SetInt64(maxV)
-	pairs := [][2]int64{
-		{minV, minV}, {minV, minV + 1}, {minV, -1}, {minV, 0}, {minV, 1}, {minV, maxV - 1}, {minV, maxV},
-		{-1, -1}, {-1, 0}, {-1, 1}, {-1, maxV},
-		{0, 0}, {0, 1}, {0, maxV},
-		{1, 1}, {1, maxV - 1}, {1, maxV},
-		{maxV - 1, maxV}, {maxV, maxV},
-	}
-
-	// For int64, use big.Int-based reference directly since values may overflow int64 intermediates.
-	checkInt64 := func(t *testing.T, opName string, op func(int64, int64) (int64, bool), a, b int64) {
-		t.Helper()
-		got, gotOk := op(a, b)
-		ba := new(big.Int).SetInt64(a)
-		bb := new(big.Int).SetInt64(b)
-		var ref *big.Int
+	} else {
+		exact := new(big.Int)
 		switch opName {
 		case "Add":
-			ref = new(big.Int).Add(ba, bb)
+			exact.Add(ba, bb)
 		case "Sub":
-			ref = new(big.Int).Sub(ba, bb)
+			exact.Sub(ba, bb)
 		case "Mul":
-			ref = new(big.Int).Mul(ba, bb)
-		case "Div":
-			if b == 0 {
-				if gotOk {
-					t.Errorf("%s(%d, %d): ok=true, want false", opName, a, b)
-				}
-				return
-			}
-			ref = new(big.Int).Quo(ba, bb)
+			exact.Mul(ba, bb)
+		default:
+			t.Fatalf("unknown op: %s", opName)
 		}
-		wantOk := ref.Cmp(lo) >= 0 && ref.Cmp(hi) <= 0
-		if gotOk != wantOk {
-			t.Errorf("%s(%d, %d): ok=%v, want ok=%v (ref=%s)", opName, a, b, gotOk, wantOk, ref)
-		} else if gotOk {
-			want := ref.Int64()
-			if got != want {
-				t.Errorf("%s(%d, %d): got=%d, want=%d", opName, a, b, got, want)
-			}
-		}
+		lo, hi := boundsOf[T]()
+		want, wantOk = wrapBig[T](exact), exact.Cmp(lo) >= 0 && exact.Cmp(hi) <= 0
 	}
+	if got != want || ok != wantOk {
+		t.Errorf("%s(%d, %d) = (%d, %v), want (%d, %v)", opName, a, b, got, ok, want, wantOk)
+	}
+}
 
+// checkBoundaryPairs runs Add, Sub, Mul and Div on each pair in both
+// operand orders.
+func checkBoundaryPairs[T Integer](t *testing.T, pairs [][2]T) {
 	ops := []struct {
 		name string
-		fn   func(int64, int64) (int64, bool)
+		fn   func(T, T) (T, bool)
 	}{
-		{"Add", Add[int64]}, {"Sub", Sub[int64]}, {"Mul", Mul[int64]}, {"Div", Div[int64]},
+		{"Add", Add[T]}, {"Sub", Sub[T]}, {"Mul", Mul[T]}, {"Div", Div[T]},
 	}
 	for _, op := range ops {
 		for _, p := range pairs {
-			t.Run(fmt.Sprintf("%s/%d,%d", op.name, p[0], p[1]), func(t *testing.T) {
-				checkInt64(t, op.name, op.fn, p[0], p[1])
-			})
+			checkBinaryOp(t, op.name, op.fn, p[0], p[1])
+			checkBinaryOp(t, op.name, op.fn, p[1], p[0])
 		}
 	}
 }
 
-func TestBoundaryUint16(t *testing.T) {
-	const maxV = math.MaxUint16
-	bmax := new(big.Int).SetUint64(maxV)
-	pairs := [][2]uint16{
-		{0, 0}, {0, 1}, {0, maxV}, {1, 1}, {1, maxV - 1}, {1, maxV}, {maxV - 1, maxV}, {maxV, maxV},
-	}
-	ops := []struct {
-		name string
-		fn   func(uint16, uint16) (uint16, bool)
-	}{
-		{"Add", Add[uint16]}, {"Sub", Sub[uint16]}, {"Mul", Mul[uint16]}, {"Div", Div[uint16]},
-	}
-	for _, op := range ops {
-		for _, p := range pairs {
-			t.Run(fmt.Sprintf("%s/%d,%d", op.name, p[0], p[1]), func(t *testing.T) {
-				checkUnsignedOp(t, op.name, op.fn, p[0], p[1], bmax)
-			})
-		}
+func signedBoundaryPairs[T Signed]() [][2]T {
+	bits := uint(unsafe.Sizeof(T(0))) * 8
+	maxV := T(uint64(1)<<(bits-1) - 1)
+	minV := -maxV - 1
+	return [][2]T{
+		{minV, minV}, {minV, minV + 1}, {minV, -1}, {minV, 0}, {minV, 1}, {minV, maxV - 1}, {minV, maxV},
+		{-1, -1}, {-1, 0}, {-1, 1}, {-1, maxV},
+		{0, 0}, {0, 1}, {0, maxV},
+		{1, 1}, {1, maxV - 1}, {1, maxV},
+		{maxV - 1, maxV}, {maxV, maxV},
+		{-100, 100}, {maxV / 2, 2}, {maxV/2 + 1, 2}, {minV / 2, 2}, {minV/2 - 1, 2},
 	}
 }
 
-func TestBoundaryUint32(t *testing.T) {
-	const maxV = math.MaxUint32
-	bmax := new(big.Int).SetUint64(maxV)
-	pairs := [][2]uint32{
+func unsignedBoundaryPairs[T Unsigned]() [][2]T {
+	maxV := ^T(0)
+	return [][2]T{
 		{0, 0}, {0, 1}, {0, maxV}, {1, 1}, {1, maxV - 1}, {1, maxV}, {maxV - 1, maxV}, {maxV, maxV},
-	}
-	ops := []struct {
-		name string
-		fn   func(uint32, uint32) (uint32, bool)
-	}{
-		{"Add", Add[uint32]}, {"Sub", Sub[uint32]}, {"Mul", Mul[uint32]}, {"Div", Div[uint32]},
-	}
-	for _, op := range ops {
-		for _, p := range pairs {
-			t.Run(fmt.Sprintf("%s/%d,%d", op.name, p[0], p[1]), func(t *testing.T) {
-				checkUnsignedOp(t, op.name, op.fn, p[0], p[1], bmax)
-			})
-		}
+		{100, 200}, {maxV / 2, 2}, {maxV/2 + 1, 2},
 	}
 }
 
-func TestBoundaryUint64(t *testing.T) {
-	const maxV = math.MaxUint64
-	bmax := new(big.Int).SetUint64(maxV)
-	pairs := [][2]uint64{
-		{0, 0}, {0, 1}, {0, maxV}, {1, 1}, {1, maxV - 1}, {1, maxV}, {maxV - 1, maxV}, {maxV, maxV},
-	}
-
-	checkUint64 := func(t *testing.T, opName string, op func(uint64, uint64) (uint64, bool), a, b uint64) {
-		t.Helper()
-		got, gotOk := op(a, b)
-		ba := new(big.Int).SetUint64(a)
-		bb := new(big.Int).SetUint64(b)
-		var ref *big.Int
-		switch opName {
-		case "Add":
-			ref = new(big.Int).Add(ba, bb)
-		case "Sub":
-			ref = new(big.Int).Sub(ba, bb)
-		case "Mul":
-			ref = new(big.Int).Mul(ba, bb)
-		case "Div":
-			if b == 0 {
-				if gotOk {
-					t.Errorf("%s(%d, %d): ok=true, want false", opName, a, b)
-				}
-				return
-			}
-			ref = new(big.Int).Quo(ba, bb)
-		}
-		wantOk := ref.Sign() >= 0 && ref.Cmp(bmax) <= 0
-		if gotOk != wantOk {
-			t.Errorf("%s(%d, %d): ok=%v, want ok=%v (ref=%s)", opName, a, b, gotOk, wantOk, ref)
-		} else if gotOk {
-			want := ref.Uint64()
-			if got != want {
-				t.Errorf("%s(%d, %d): got=%d, want=%d", opName, a, b, got, want)
-			}
-		}
-	}
-
-	ops := []struct {
-		name string
-		fn   func(uint64, uint64) (uint64, bool)
-	}{
-		{"Add", Add[uint64]}, {"Sub", Sub[uint64]}, {"Mul", Mul[uint64]}, {"Div", Div[uint64]},
-	}
-	for _, op := range ops {
-		for _, p := range pairs {
-			t.Run(fmt.Sprintf("%s/%d,%d", op.name, p[0], p[1]), func(t *testing.T) {
-				checkUint64(t, op.name, op.fn, p[0], p[1])
-			})
-		}
-	}
+func TestBoundary(t *testing.T) {
+	t.Run("int16", func(t *testing.T) { checkBoundaryPairs(t, signedBoundaryPairs[int16]()) })
+	t.Run("int32", func(t *testing.T) { checkBoundaryPairs(t, signedBoundaryPairs[int32]()) })
+	t.Run("int64", func(t *testing.T) { checkBoundaryPairs(t, signedBoundaryPairs[int64]()) })
+	t.Run("uint16", func(t *testing.T) { checkBoundaryPairs(t, unsignedBoundaryPairs[uint16]()) })
+	t.Run("uint32", func(t *testing.T) { checkBoundaryPairs(t, unsignedBoundaryPairs[uint32]()) })
+	t.Run("uint64", func(t *testing.T) { checkBoundaryPairs(t, unsignedBoundaryPairs[uint64]()) })
 }
 
 // ---------------------------------------------------------------------------
@@ -875,16 +514,16 @@ func TestMulDiv(t *testing.T) {
 	})
 
 	t.Run("c_zero", func(t *testing.T) {
-		_, ok := MulDiv[int64](1, 2, 0)
-		if ok {
-			t.Error("MulDiv(1,2,0): ok=true, want false")
+		r, ok := MulDiv[int64](1, 2, 0)
+		if ok || r != 0 {
+			t.Errorf("MulDiv(1,2,0): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 
 	t.Run("c_zero_uint", func(t *testing.T) {
-		_, ok := MulDiv[uint64](1, 2, 0)
-		if ok {
-			t.Error("MulDiv(1,2,0): ok=true, want false")
+		r, ok := MulDiv[uint64](1, 2, 0)
+		if ok || r != 0 {
+			t.Errorf("MulDiv(1,2,0): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 
@@ -984,16 +623,16 @@ func TestMulMod(t *testing.T) {
 	})
 
 	t.Run("c_zero", func(t *testing.T) {
-		_, ok := MulMod[int64](1, 2, 0)
-		if ok {
-			t.Error("MulMod(1,2,0): ok=true, want false")
+		r, ok := MulMod[int64](1, 2, 0)
+		if ok || r != 0 {
+			t.Errorf("MulMod(1,2,0): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 
 	t.Run("c_zero_uint", func(t *testing.T) {
-		_, ok := MulMod[uint64](1, 2, 0)
-		if ok {
-			t.Error("MulMod(1,2,0): ok=true, want false")
+		r, ok := MulMod[uint64](1, 2, 0)
+		if ok || r != 0 {
+			t.Errorf("MulMod(1,2,0): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 
@@ -1243,9 +882,9 @@ func TestLsh(t *testing.T) {
 		}
 	})
 	t.Run("1_n8_uint8_overflow", func(t *testing.T) {
-		_, ok := Lsh[uint8](1, 8)
-		if ok {
-			t.Error("Lsh[uint8](1,8): ok=true, want false")
+		r, ok := Lsh[uint8](1, 8)
+		if ok || r != 0 {
+			t.Errorf("Lsh[uint8](1,8): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 	t.Run("1_n63_int64_overflow", func(t *testing.T) {
@@ -1261,9 +900,9 @@ func TestLsh(t *testing.T) {
 		}
 	})
 	t.Run("1_n64_uint64_overflow", func(t *testing.T) {
-		_, ok := Lsh[uint64](1, 64)
-		if ok {
-			t.Error("Lsh[uint64](1,64): ok=true, want false")
+		r, ok := Lsh[uint64](1, 64)
+		if ok || r != 0 {
+			t.Errorf("Lsh[uint64](1,64): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 
@@ -1670,11 +1309,17 @@ func TestDivModSpecialCases(t *testing.T) {
 // I. Must* panic tests
 // ---------------------------------------------------------------------------
 
-func expectPanic(t *testing.T, name string, fn func()) {
+// expectPanic checks that fn panics with exactly the message want. Comparing
+// the message makes sure the panic comes from the library, not from the Go
+// runtime (for example a native division by zero).
+func expectPanic(t *testing.T, name, want string, fn func()) {
 	t.Helper()
 	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("%s: expected panic but did not panic", name)
+		r := recover()
+		if r == nil {
+			t.Errorf("%s: expected panic %q but did not panic", name, want)
+		} else if r != want {
+			t.Errorf("%s: panic = %#v, want %q", name, r, want)
 		}
 	}()
 	fn()
@@ -1700,7 +1345,7 @@ func TestMustAddStandalone(t *testing.T) {
 		})
 	})
 	t.Run("overflow", func(t *testing.T) {
-		expectPanic(t, "MustAdd(MaxInt64,1)", func() {
+		expectPanic(t, "MustAdd(MaxInt64,1)", "safeint: Add overflow", func() {
 			MustAdd[int64](math.MaxInt64, 1)
 		})
 	})
@@ -1716,7 +1361,7 @@ func TestMustSubStandalone(t *testing.T) {
 		})
 	})
 	t.Run("overflow", func(t *testing.T) {
-		expectPanic(t, "MustSub(MinInt64,1)", func() {
+		expectPanic(t, "MustSub(MinInt64,1)", "safeint: Sub overflow", func() {
 			MustSub[int64](math.MinInt64, 1)
 		})
 	})
@@ -1732,7 +1377,7 @@ func TestMustMulStandalone(t *testing.T) {
 		})
 	})
 	t.Run("overflow", func(t *testing.T) {
-		expectPanic(t, "MustMul(MaxInt64,2)", func() {
+		expectPanic(t, "MustMul(MaxInt64,2)", "safeint: Mul overflow", func() {
 			MustMul[int64](math.MaxInt64, 2)
 		})
 	})
@@ -1748,12 +1393,12 @@ func TestMustDivStandalone(t *testing.T) {
 		})
 	})
 	t.Run("div_by_zero", func(t *testing.T) {
-		expectPanic(t, "MustDiv(1,0)", func() {
+		expectPanic(t, "MustDiv(1,0)", "safeint: Div overflow", func() {
 			MustDiv[int64](1, 0)
 		})
 	})
 	t.Run("MinInt64_neg1", func(t *testing.T) {
-		expectPanic(t, "MustDiv(MinInt64,-1)", func() {
+		expectPanic(t, "MustDiv(MinInt64,-1)", "safeint: Div overflow", func() {
 			MustDiv[int64](math.MinInt64, -1)
 		})
 	})
@@ -1769,7 +1414,7 @@ func TestMustNegStandalone(t *testing.T) {
 		})
 	})
 	t.Run("overflow", func(t *testing.T) {
-		expectPanic(t, "MustNeg(MinInt64)", func() {
+		expectPanic(t, "MustNeg(MinInt64)", "safeint: Neg overflow", func() {
 			MustNeg[int64](math.MinInt64)
 		})
 	})
@@ -1785,12 +1430,12 @@ func TestMustMulDivStandalone(t *testing.T) {
 		})
 	})
 	t.Run("overflow_c_zero", func(t *testing.T) {
-		expectPanic(t, "MustMulDiv(1,2,0)", func() {
+		expectPanic(t, "MustMulDiv(1,2,0)", "safeint: MulDiv overflow", func() {
 			MustMulDiv[int64](1, 2, 0)
 		})
 	})
 	t.Run("overflow_result", func(t *testing.T) {
-		expectPanic(t, "MustMulDiv(MinInt64,-1,1)", func() {
+		expectPanic(t, "MustMulDiv(MinInt64,-1,1)", "safeint: MulDiv overflow", func() {
 			MustMulDiv[int64](math.MinInt64, -1, 1)
 		})
 	})
@@ -1806,12 +1451,12 @@ func TestMustConvertStandalone(t *testing.T) {
 		})
 	})
 	t.Run("overflow", func(t *testing.T) {
-		expectPanic(t, "MustConvert[int64,int8](128)", func() {
+		expectPanic(t, "MustConvert[int64,int8](128)", "safeint: Convert overflow", func() {
 			MustConvert[int64, int8](128)
 		})
 	})
 	t.Run("sign_overflow", func(t *testing.T) {
-		expectPanic(t, "MustConvert[int64,uint64](-1)", func() {
+		expectPanic(t, "MustConvert[int64,uint64](-1)", "safeint: Convert overflow", func() {
 			MustConvert[int64, uint64](-1)
 		})
 	})

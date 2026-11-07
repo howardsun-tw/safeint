@@ -157,8 +157,11 @@ Returns `(0, false)` when the divisor/modulus is zero or the final result overfl
 
 Some edge cases worth noting:
 
+- **Add, Sub, Mul, Neg and Abs overflow** — return `false` and the wrapped result,
+  the value that native Go arithmetic produces. For example, `Add[int8](127, 1)`
+  returns `(-128, false)`.
 - **Division by zero** — returns `(0, false)`, never panics.
-- **Signed MinInt / -1** — detected as overflow (Go would silently wrap).
+- **Signed MinInt / -1** — detected as overflow and returns `(0, false)` (Go would silently wrap).
 - **MinInt % -1** — returns `(0, true)` (correct in Go, no overflow).
 - **Neg on unsigned** — overflow for any non-zero value.
 - **Abs on signed MinInt** — overflow (|MinInt| > MaxInt).
@@ -201,7 +204,13 @@ id, ok := safeint.Add(UserID(1), UserID(2)) // id is UserID
 
 ## Testing
 
-Tests include exhaustive verification of all 8-bit type ranges (int8, uint8) against reference implementations using `math/big`, plus targeted edge-case tests for 16/32/64-bit types.
+For `int8` and `uint8`, the tests check every operation for every operand
+against exact reference arithmetic (`int64`, and `math/big` for wrapped `Pow`
+results). This covers Add, Sub, Mul, Div, DivMod, Mod, Neg, Abs, MulDiv, MulMod
+and Convert (to every integer type). Pow and Lsh use every base and a fixed set
+of exponents and shift counts. Both the result and `ok` are checked, including
+the documented result on overflow. For 16-, 32- and 64-bit types, boundary
+value pairs are checked against `math/big`, plus targeted edge-case tests.
 
 ```
 go test ./...

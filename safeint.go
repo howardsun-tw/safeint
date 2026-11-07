@@ -33,7 +33,8 @@ type Unsigned interface {
 // Checked arithmetic
 // ---------------------------------------------------------------------------
 
-// Add returns a + b and true if the result does not overflow.
+// Add returns a + b and true if the result does not overflow. On overflow it
+// returns the wrapped result, the value that native a + b produces, and false.
 func Add[T Integer](a, b T) (T, bool) {
 	c := a + b
 	if (c > a) == (b > 0) {
@@ -42,7 +43,8 @@ func Add[T Integer](a, b T) (T, bool) {
 	return c, false
 }
 
-// Sub returns a - b and true if the result does not overflow.
+// Sub returns a - b and true if the result does not overflow. On overflow it
+// returns the wrapped result, the value that native a - b produces, and false.
 func Sub[T Integer](a, b T) (T, bool) {
 	c := a - b
 	if (c < a) == (b > 0) {
@@ -51,7 +53,8 @@ func Sub[T Integer](a, b T) (T, bool) {
 	return c, false
 }
 
-// Mul returns a * b and true if the result does not overflow.
+// Mul returns a * b and true if the result does not overflow. On overflow it
+// returns the wrapped result, the value that native a * b produces, and false.
 // Both a sign check and a division-roundtrip check are required:
 // the sign check catches MinInt * -1; the roundtrip catches magnitude overflow.
 func Mul[T Integer](a, b T) (T, bool) {
@@ -109,13 +112,15 @@ func Mod[T Integer](a, b T) (T, bool) {
 }
 
 // Neg returns -a and true if the result does not overflow.
-// Overflows for signed MinInt and all non-zero unsigned values.
+// Overflows for signed MinInt and all non-zero unsigned values. On overflow it
+// returns the wrapped result, the value that native -a produces, and false.
 func Neg[T Integer](a T) (T, bool) {
 	return Sub(T(0), a)
 }
 
 // Abs returns |a| and true if the result does not overflow.
-// Overflows only for signed MinInt (whose absolute value exceeds MaxInt).
+// Overflows only for signed MinInt (whose absolute value exceeds MaxInt), and
+// then returns (MinInt, false), the wrapped result.
 // For unsigned types, always returns (a, true).
 func Abs[T Integer](a T) (T, bool) {
 	if a < 0 {

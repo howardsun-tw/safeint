@@ -197,7 +197,7 @@ func TestDivOverflow(t *testing.T) {
 	}{
 		{"normal", New[int8](42), New[int8](7), 6, true},
 		{"negative", New[int8](-42), New[int8](7), -6, true},
-		{"min_div_neg1", New[int8](-128), New[int8](-1), -128, false},
+		{"min_div_neg1", New[int8](-128), New[int8](-1), 0, false},
 		{"div_by_zero", New[int8](1), New[int8](0), 0, false},
 	}
 	for _, tc := range tests {
@@ -223,7 +223,7 @@ func TestDivModOverflow(t *testing.T) {
 	}{
 		{"normal", New[int8](17), New[int8](5), 3, 2, true},
 		{"negative_dividend", New[int8](-17), New[int8](5), -3, -2, true},
-		{"min_div_neg1", New[int8](-128), New[int8](-1), -128, 0, false},
+		{"min_div_neg1", New[int8](-128), New[int8](-1), 0, 0, false},
 		{"div_by_zero", New[int8](10), New[int8](0), 0, 0, false},
 	}
 	for _, tc := range tests {
@@ -667,7 +667,7 @@ func TestMustAdd(t *testing.T) {
 		}
 	})
 	t.Run("overflow_panics", func(t *testing.T) {
-		expectPanic(t, "MustAdd overflow", func() {
+		expectPanic(t, "MustAdd overflow", "safeint: Add overflow", func() {
 			New[int8](127).MustAdd(New[int8](1))
 		})
 	})
@@ -684,7 +684,7 @@ func TestMustSub(t *testing.T) {
 		}
 	})
 	t.Run("overflow_panics", func(t *testing.T) {
-		expectPanic(t, "MustSub overflow", func() {
+		expectPanic(t, "MustSub overflow", "safeint: Sub overflow", func() {
 			New[uint8](0).MustSub(New[uint8](1))
 		})
 	})
@@ -701,7 +701,7 @@ func TestMustMul(t *testing.T) {
 		}
 	})
 	t.Run("overflow_panics", func(t *testing.T) {
-		expectPanic(t, "MustMul overflow", func() {
+		expectPanic(t, "MustMul overflow", "safeint: Mul overflow", func() {
 			New[int8](-128).MustMul(New[int8](-1))
 		})
 	})
@@ -718,12 +718,12 @@ func TestMustDiv(t *testing.T) {
 		}
 	})
 	t.Run("div_by_zero_panics", func(t *testing.T) {
-		expectPanic(t, "MustDiv div-by-zero", func() {
+		expectPanic(t, "MustDiv div-by-zero", "safeint: Div overflow", func() {
 			New[int8](1).MustDiv(New[int8](0))
 		})
 	})
 	t.Run("overflow_panics", func(t *testing.T) {
-		expectPanic(t, "MustDiv overflow", func() {
+		expectPanic(t, "MustDiv overflow", "safeint: Div overflow", func() {
 			New[int8](-128).MustDiv(New[int8](-1))
 		})
 	})
