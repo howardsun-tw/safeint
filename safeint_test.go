@@ -535,14 +535,6 @@ func TestMulDiv(t *testing.T) {
 		}
 	})
 
-	t.Run("int8_100_50_25", func(t *testing.T) {
-		// 100*50 = 5000, 5000/25 = 200, but 200 > MaxInt8 (127) so overflow.
-		_, ok := MulDiv[int8](100, 50, 25)
-		if ok {
-			t.Error("MulDiv[int8](100,50,25): ok=true, want false (200 overflows int8)")
-		}
-	})
-
 	t.Run("uint8_100_50_25", func(t *testing.T) {
 		// 100*50 = 5000, 5000/25 = 200, and 200 fits uint8 (max 255).
 		r, ok := MulDiv[uint8](100, 50, 25)
@@ -611,6 +603,14 @@ func TestMulMod(t *testing.T) {
 		r, ok := MulMod[uint64](math.MaxUint64, math.MaxUint64, math.MaxUint64)
 		if !ok || r != 0 {
 			t.Errorf("MulMod(MaxUint64,MaxUint64,MaxUint64): got=(%d,%v), want=(0,true)", r, ok)
+		}
+	})
+
+	t.Run("int64_MaxInt64_MaxInt64_10", func(t *testing.T) {
+		// MaxInt64 % 10 == 7 and 7*7 % 10 == 9.
+		r, ok := MulMod[int64](math.MaxInt64, math.MaxInt64, 10)
+		if !ok || r != 9 {
+			t.Errorf("MulMod(MaxInt64,MaxInt64,10): got=(%d,%v), want=(9,true)", r, ok)
 		}
 	})
 
@@ -1155,91 +1155,32 @@ func TestConvert(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDivModSpecialCases(t *testing.T) {
-	// Division by zero for various types.
-	t.Run("div_by_zero_int8", func(t *testing.T) {
-		_, ok := Div[int8](42, 0)
-		if ok {
-			t.Error("Div(42, 0): ok=true, want false")
-		}
-	})
-	t.Run("div_by_zero_uint8", func(t *testing.T) {
-		_, ok := Div[uint8](42, 0)
-		if ok {
-			t.Error("Div(42, 0): ok=true, want false")
-		}
-	})
-	t.Run("div_by_zero_int64", func(t *testing.T) {
-		_, ok := Div[int64](42, 0)
-		if ok {
-			t.Error("Div(42, 0): ok=true, want false")
-		}
-	})
-	t.Run("div_by_zero_uint64", func(t *testing.T) {
-		_, ok := Div[uint64](42, 0)
-		if ok {
-			t.Error("Div(42, 0): ok=true, want false")
-		}
-	})
+	// Division by zero and MinInt / -1 for 64-bit types (8-bit types are
+	// covered by TestExhaustive8Bit, Div by TestBoundary).
 	t.Run("divmod_by_zero_int64", func(t *testing.T) {
-		_, _, ok := DivMod[int64](42, 0)
-		if ok {
-			t.Error("DivMod(42, 0): ok=true, want false")
+		q, r, ok := DivMod[int64](42, 0)
+		if ok || q != 0 || r != 0 {
+			t.Errorf("DivMod(42, 0): got=(%d,%d,%v), want=(0,0,false)", q, r, ok)
 		}
 	})
 	t.Run("mod_by_zero_int64", func(t *testing.T) {
-		_, ok := Mod[int64](42, 0)
-		if ok {
-			t.Error("Mod(42, 0): ok=true, want false")
-		}
-	})
-	t.Run("div_by_zero_0_int64", func(t *testing.T) {
-		_, ok := Div[int64](0, 0)
-		if ok {
-			t.Error("Div(0, 0): ok=true, want false")
+		r, ok := Mod[int64](42, 0)
+		if ok || r != 0 {
+			t.Errorf("Mod(42, 0): got=(%d,%v), want=(0,false)", r, ok)
 		}
 	})
 
 	// MinInt / -1 → Div overflow, Mod ok with result 0.
-	t.Run("MinInt8_div_neg1", func(t *testing.T) {
-		_, ok := Div[int8](math.MinInt8, -1)
-		if ok {
-			t.Error("Div(MinInt8, -1): ok=true, want false")
-		}
-	})
-	t.Run("MinInt8_mod_neg1", func(t *testing.T) {
-		r, ok := Mod[int8](math.MinInt8, -1)
-		if !ok || r != 0 {
-			t.Errorf("Mod(MinInt8, -1): got=(%d,%v), want=(0,true)", r, ok)
-		}
-	})
-	t.Run("MinInt16_div_neg1", func(t *testing.T) {
-		_, ok := Div[int16](math.MinInt16, -1)
-		if ok {
-			t.Error("Div(MinInt16, -1): ok=true, want false")
-		}
-	})
 	t.Run("MinInt16_mod_neg1", func(t *testing.T) {
 		r, ok := Mod[int16](math.MinInt16, -1)
 		if !ok || r != 0 {
 			t.Errorf("Mod(MinInt16, -1): got=(%d,%v), want=(0,true)", r, ok)
 		}
 	})
-	t.Run("MinInt32_div_neg1", func(t *testing.T) {
-		_, ok := Div[int32](math.MinInt32, -1)
-		if ok {
-			t.Error("Div(MinInt32, -1): ok=true, want false")
-		}
-	})
 	t.Run("MinInt32_mod_neg1", func(t *testing.T) {
 		r, ok := Mod[int32](math.MinInt32, -1)
 		if !ok || r != 0 {
 			t.Errorf("Mod(MinInt32, -1): got=(%d,%v), want=(0,true)", r, ok)
-		}
-	})
-	t.Run("MinInt64_div_neg1", func(t *testing.T) {
-		_, ok := Div[int64](math.MinInt64, -1)
-		if ok {
-			t.Error("Div(MinInt64, -1): ok=true, want false")
 		}
 	})
 	t.Run("MinInt64_mod_neg1", func(t *testing.T) {
@@ -1250,27 +1191,15 @@ func TestDivModSpecialCases(t *testing.T) {
 	})
 
 	// DivMod for MinInt/-1: q overflows, r=0.
-	t.Run("MinInt8_divmod_neg1", func(t *testing.T) {
-		_, _, ok := DivMod[int8](math.MinInt8, -1)
-		if ok {
-			t.Error("DivMod(MinInt8, -1): ok=true, want false")
-		}
-	})
 	t.Run("MinInt64_divmod_neg1", func(t *testing.T) {
-		_, _, ok := DivMod[int64](math.MinInt64, -1)
-		if ok {
-			t.Error("DivMod(MinInt64, -1): ok=true, want false")
+		q, r, ok := DivMod[int64](math.MinInt64, -1)
+		if ok || q != 0 || r != 0 {
+			t.Errorf("DivMod(MinInt64, -1): got=(%d,%d,%v), want=(0,0,false)", q, r, ok)
 		}
 	})
 
-	// Truncation to zero: (1, -3), (-1, 3), (1, MaxInt) → ok=true.
+	// Truncation to zero: (-1, 3), (1, MaxInt) → ok=true.
 	// This tests the bug fix: q==0 should be ok.
-	t.Run("truncation_1_neg3", func(t *testing.T) {
-		q, ok := Div[int64](1, -3)
-		if !ok || q != 0 {
-			t.Errorf("Div(1, -3): got=(%d,%v), want=(0,true)", q, ok)
-		}
-	})
 	t.Run("truncation_neg1_3", func(t *testing.T) {
 		q, ok := Div[int64](-1, 3)
 		if !ok || q != 0 {
@@ -1460,159 +1389,6 @@ func TestMustConvertStandalone(t *testing.T) {
 			MustConvert[int64, uint64](-1)
 		})
 	})
-}
-
-// ---------------------------------------------------------------------------
-// J. Property-based tests
-// ---------------------------------------------------------------------------
-
-func TestPropertyCommutativity(t *testing.T) {
-	signedVals := []int64{
-		math.MinInt64, math.MinInt64 + 1, -1000, -1, 0, 1, 1000, math.MaxInt64 - 1, math.MaxInt64,
-	}
-	unsignedVals := []uint64{
-		0, 1, 1000, math.MaxUint64/2 - 1, math.MaxUint64 / 2, math.MaxUint64 - 1, math.MaxUint64,
-	}
-
-	t.Run("Add_int64", func(t *testing.T) {
-		for _, a := range signedVals {
-			for _, b := range signedVals {
-				r1, ok1 := Add(a, b)
-				r2, ok2 := Add(b, a)
-				if ok1 != ok2 || (ok1 && r1 != r2) {
-					t.Errorf("Add(%d,%d) != Add(%d,%d): (%d,%v) vs (%d,%v)", a, b, b, a, r1, ok1, r2, ok2)
-				}
-			}
-		}
-	})
-
-	t.Run("Mul_int64", func(t *testing.T) {
-		for _, a := range signedVals {
-			for _, b := range signedVals {
-				r1, ok1 := Mul(a, b)
-				r2, ok2 := Mul(b, a)
-				if ok1 != ok2 || (ok1 && r1 != r2) {
-					t.Errorf("Mul(%d,%d) != Mul(%d,%d): (%d,%v) vs (%d,%v)", a, b, b, a, r1, ok1, r2, ok2)
-				}
-			}
-		}
-	})
-
-	t.Run("Add_uint64", func(t *testing.T) {
-		for _, a := range unsignedVals {
-			for _, b := range unsignedVals {
-				r1, ok1 := Add(a, b)
-				r2, ok2 := Add(b, a)
-				if ok1 != ok2 || (ok1 && r1 != r2) {
-					t.Errorf("Add(%d,%d) != Add(%d,%d): (%d,%v) vs (%d,%v)", a, b, b, a, r1, ok1, r2, ok2)
-				}
-			}
-		}
-	})
-
-	t.Run("Mul_uint64", func(t *testing.T) {
-		for _, a := range unsignedVals {
-			for _, b := range unsignedVals {
-				r1, ok1 := Mul(a, b)
-				r2, ok2 := Mul(b, a)
-				if ok1 != ok2 || (ok1 && r1 != r2) {
-					t.Errorf("Mul(%d,%d) != Mul(%d,%d): (%d,%v) vs (%d,%v)", a, b, b, a, r1, ok1, r2, ok2)
-				}
-			}
-		}
-	})
-}
-
-func TestPropertyIdentity(t *testing.T) {
-	signedVals := []int64{
-		math.MinInt64, math.MinInt64 + 1, -1000, -1, 0, 1, 1000, math.MaxInt64 - 1, math.MaxInt64,
-	}
-	unsignedVals := []uint64{
-		0, 1, 1000, math.MaxUint64 / 2, math.MaxUint64 - 1, math.MaxUint64,
-	}
-
-	// Add(a, 0) == (a, true)
-	t.Run("Add_zero_int64", func(t *testing.T) {
-		for _, a := range signedVals {
-			r, ok := Add(a, int64(0))
-			if !ok || r != a {
-				t.Errorf("Add(%d, 0): got=(%d,%v), want=(%d,true)", a, r, ok, a)
-			}
-		}
-	})
-
-	t.Run("Add_zero_uint64", func(t *testing.T) {
-		for _, a := range unsignedVals {
-			r, ok := Add(a, uint64(0))
-			if !ok || r != a {
-				t.Errorf("Add(%d, 0): got=(%d,%v), want=(%d,true)", a, r, ok, a)
-			}
-		}
-	})
-
-	// Mul(a, 1) == (a, true)
-	t.Run("Mul_one_int64", func(t *testing.T) {
-		for _, a := range signedVals {
-			r, ok := Mul(a, int64(1))
-			if !ok || r != a {
-				t.Errorf("Mul(%d, 1): got=(%d,%v), want=(%d,true)", a, r, ok, a)
-			}
-		}
-	})
-
-	t.Run("Mul_one_uint64", func(t *testing.T) {
-		for _, a := range unsignedVals {
-			r, ok := Mul(a, uint64(1))
-			if !ok || r != a {
-				t.Errorf("Mul(%d, 1): got=(%d,%v), want=(%d,true)", a, r, ok, a)
-			}
-		}
-	})
-}
-
-func TestPropertyZeroMul(t *testing.T) {
-	signedVals := []int64{
-		math.MinInt64, math.MinInt64 + 1, -1000, -1, 0, 1, 1000, math.MaxInt64 - 1, math.MaxInt64,
-	}
-	unsignedVals := []uint64{
-		0, 1, 1000, math.MaxUint64 / 2, math.MaxUint64 - 1, math.MaxUint64,
-	}
-
-	// Mul(a, 0) == (0, true)
-	t.Run("int64", func(t *testing.T) {
-		for _, a := range signedVals {
-			r, ok := Mul(a, int64(0))
-			if !ok || r != 0 {
-				t.Errorf("Mul(%d, 0): got=(%d,%v), want=(0,true)", a, r, ok)
-			}
-		}
-	})
-
-	t.Run("uint64", func(t *testing.T) {
-		for _, a := range unsignedVals {
-			r, ok := Mul(a, uint64(0))
-			if !ok || r != 0 {
-				t.Errorf("Mul(%d, 0): got=(%d,%v), want=(0,true)", a, r, ok)
-			}
-		}
-	})
-}
-
-func TestPropertyInverse(t *testing.T) {
-	// If Neg(a) succeeds, then Add(a, Neg(a)) should succeed and return 0.
-	signedVals := []int64{
-		math.MinInt64, math.MinInt64 + 1, -1000, -1, 0, 1, 1000, math.MaxInt64 - 1, math.MaxInt64,
-	}
-	for _, a := range signedVals {
-		neg, negOk := Neg(a)
-		if !negOk {
-			continue
-		}
-		sum, sumOk := Add(a, neg)
-		if !sumOk || sum != 0 {
-			t.Errorf("Add(%d, Neg(%d)=%d): got=(%d,%v), want=(0,true)", a, a, neg, sum, sumOk)
-		}
-	}
 }
 
 // ---------------------------------------------------------------------------

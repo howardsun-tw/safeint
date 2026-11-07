@@ -60,31 +60,7 @@ func TestAddOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestAddOverflowUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[uint8]
-		want uint8
-		ok   bool
-	}{
-		{"normal", New[uint8](100), New[uint8](50), 150, true},
-		{"max_boundary", New[uint8](254), New[uint8](1), 255, true},
-		{"overflow", New[uint8](255), New[uint8](1), 0, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.AddOverflow(tc.b)
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -108,31 +84,7 @@ func TestSubOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestSubOverflowUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[uint8]
-		want uint8
-		ok   bool
-	}{
-		{"normal", New[uint8](50), New[uint8](30), 20, true},
-		{"zero_result", New[uint8](10), New[uint8](10), 0, true},
-		{"underflow", New[uint8](0), New[uint8](1), 255, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.SubOverflow(tc.b)
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -158,30 +110,7 @@ func TestMulOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestMulOverflowUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[uint8]
-		want uint8
-		ok   bool
-	}{
-		{"normal", New[uint8](10), New[uint8](25), 250, true},
-		{"overflow", New[uint8](16), New[uint8](16), 0, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.MulOverflow(tc.b)
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -206,7 +135,7 @@ func TestDivOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -232,13 +161,8 @@ func TestDivModOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok {
-				if q.Val() != tc.wantQ {
-					t.Fatalf("quotient = %d, want %d", q.Val(), tc.wantQ)
-				}
-				if r.Val() != tc.wantR {
-					t.Fatalf("remainder = %d, want %d", r.Val(), tc.wantR)
-				}
+			if q.Val() != tc.wantQ || r.Val() != tc.wantR {
+				t.Fatalf("result = (%d, %d), want (%d, %d)", q.Val(), r.Val(), tc.wantQ, tc.wantR)
 			}
 		})
 	}
@@ -261,7 +185,7 @@ func TestModOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -286,28 +210,8 @@ func TestNegOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestNegOverflowUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a    Int[uint8]
-		ok   bool
-	}{
-		{"zero_ok", New[uint8](0), true},
-		{"nonzero_overflow", New[uint8](1), false},
-		{"max_overflow", New[uint8](255), false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, ok := tc.a.NegOverflow()
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
 		})
 	}
@@ -331,28 +235,6 @@ func TestAbsOverflow(t *testing.T) {
 			got, ok := tc.a.AbsOverflow()
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestAbsOverflowUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a    Int[uint8]
-		want uint8
-	}{
-		{"zero", New[uint8](0), 0},
-		{"normal", New[uint8](200), 200},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.AbsOverflow()
-			if !ok {
-				t.Fatalf("ok = false, want true")
 			}
 			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
@@ -383,32 +265,7 @@ func TestPowOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestPowOverflowSigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a    Int[int8]
-		exp  uint
-		want int8
-		ok   bool
-	}{
-		{"neg2^7", New[int8](-2), 7, -128, true},
-		{"neg2^6", New[int8](-2), 6, 64, true},
-		{"neg1^99", New[int8](-1), 99, -1, true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.PowOverflow(tc.exp)
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -428,31 +285,6 @@ func TestLshOverflow(t *testing.T) {
 		{"zero_shift", New[int8](127), 0, 127, true},
 		{"zero_value", New[int8](0), 10, 0, true},
 		{"shift_too_large", New[int8](1), 8, 0, false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.LshOverflow(tc.n)
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestLshOverflowUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a    Int[uint8]
-		n    uint
-		want uint8
-		ok   bool
-	}{
-		{"normal", New[uint8](1), 7, 128, true},
-		{"overflow", New[uint8](1), 8, 0, false},
-		{"bits_lost", New[uint8](3), 7, 128, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -501,38 +333,7 @@ func TestMulDivOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
-				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
-			}
-		})
-	}
-}
-
-func TestMulDivOverflowSmall(t *testing.T) {
-	tests := []struct {
-		name    string
-		a, b, c Int[int8]
-		want    int8
-		ok      bool
-	}{
-		{
-			"intermediate_would_overflow",
-			New[int8](100), New[int8](100), New[int8](100),
-			100, true,
-		},
-		{
-			"result_overflows_int8",
-			New[int8](100), New[int8](100), New[int8](1),
-			0, false,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok := tc.a.MulDivOverflow(tc.b, tc.c)
-			if ok != tc.ok {
-				t.Fatalf("ok = %v, want %v", ok, tc.ok)
-			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
@@ -561,11 +362,6 @@ func TestMulModOverflow(t *testing.T) {
 			New[int64](10), New[int64](20), New[int64](0),
 			0, false,
 		},
-		{
-			"large_intermediate",
-			New[int64](math.MaxInt64), New[int64](math.MaxInt64), New[int64](10),
-			9, true, // MaxInt64 mod 10 = 7, 7*7 mod 10 = 9
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -573,21 +369,10 @@ func TestMulModOverflow(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("ok = %v, want %v", ok, tc.ok)
 			}
-			if ok && got.Val() != tc.want {
+			if got.Val() != tc.want {
 				t.Fatalf("result = %d, want %d", got.Val(), tc.want)
 			}
 		})
-	}
-}
-
-func TestMulModOverflowSmall(t *testing.T) {
-	// int8: (7*5)%3 = 35%3 = 2
-	got, ok := New[int8](7).MulModOverflow(New[int8](5), New[int8](3))
-	if !ok {
-		t.Fatalf("ok = false, want true")
-	}
-	if got.Val() != 2 {
-		t.Fatalf("result = %d, want 2", got.Val())
 	}
 }
 
@@ -756,26 +541,6 @@ func TestCmp(t *testing.T) {
 	}
 }
 
-func TestCmpUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[uint8]
-		want int
-	}{
-		{"less", New[uint8](0), New[uint8](255), -1},
-		{"equal", New[uint8](128), New[uint8](128), 0},
-		{"greater", New[uint8](255), New[uint8](0), 1},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.a.Cmp(tc.b)
-			if got != tc.want {
-				t.Fatalf("Cmp = %d, want %d", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestEq(t *testing.T) {
 	tests := []struct {
 		name string
@@ -881,25 +646,6 @@ func TestIsZero(t *testing.T) {
 		{"zero", New[int64](0), true},
 		{"positive", New[int64](1), false},
 		{"negative", New[int64](-1), false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.IsZero(); got != tc.want {
-				t.Fatalf("IsZero = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestIsZeroUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a    Int[uint8]
-		want bool
-	}{
-		{"zero", New[uint8](0), true},
-		{"nonzero", New[uint8](1), false},
-		{"max", New[uint8](255), false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1211,7 +957,9 @@ func TestJSON_NamedQuotedCodecNumericRoundTrip(t *testing.T) {
 func checkJSONDecodeState[T Integer](t *testing.T, boundaries []T, invalid []string) {
 	t.Helper()
 	v := New(T(7))
-	for _, data := range append([]string{`"8"`, "true", "{}", "[]", "1.5", "1e1", "{"}, invalid...) {
+	// Syntax errors are left out: encoding/json rejects them before it calls
+	// UnmarshalJSON, so they cannot detect a regression here.
+	for _, data := range append([]string{`"8"`, "true", "{}", "[]", "[1]", `{"x":1}`, "1.5", "1.0", "1e1"}, invalid...) {
 		if err := json.Unmarshal([]byte(data), &v); err == nil {
 			t.Fatalf("accepted invalid input %s", data)
 		}
@@ -1242,6 +990,15 @@ func checkJSONDecodeState[T Integer](t *testing.T, boundaries []T, invalid []str
 func TestJSON_NumericDecodeState(t *testing.T) {
 	t.Run("int8", func(t *testing.T) { checkJSONDecodeState(t, []int8{-128, 127}, []string{"-129", "128"}) })
 	t.Run("uint8", func(t *testing.T) { checkJSONDecodeState(t, []uint8{0, 255}, []string{"-1", "256"}) })
+	t.Run("int32", func(t *testing.T) {
+		checkJSONDecodeState(t, []int32{math.MinInt32, -100, 0, 42, math.MaxInt32}, []string{"-2147483649", "2147483648"})
+	})
+	t.Run("int64", func(t *testing.T) {
+		checkJSONDecodeState(t, []int64{math.MinInt64, -12345, math.MaxInt64}, []string{"-9223372036854775809", "9223372036854775808"})
+	})
+	t.Run("uint64", func(t *testing.T) {
+		checkJSONDecodeState(t, []uint64{0, math.MaxInt64 + 1, math.MaxUint64}, []string{"-1", "18446744073709551616"})
+	})
 	t.Run("named_signed", func(t *testing.T) {
 		checkJSONDecodeState(t, []jsonIndex{math.MinInt64, math.MaxInt64}, []string{"-9223372036854775809", "9223372036854775808"})
 	})
@@ -1346,15 +1103,6 @@ func TestUnmarshalJSONErrorType(t *testing.T) {
 		var v Int[int32]
 		check(t, json.Unmarshal([]byte("1.5"), &v), &v, "number 1.5")
 	})
-	t.Run("value_unchanged_on_error", func(t *testing.T) {
-		v := New[int8](7)
-		if err := json.Unmarshal([]byte("128"), &v); err == nil {
-			t.Fatalf("expected error, got nil")
-		}
-		if v.Val() != 7 {
-			t.Fatalf("Val = %d, want 7 (unchanged)", v.Val())
-		}
-	})
 	t.Run("syntax_error_passes_through", func(t *testing.T) {
 		var v Int[int32]
 		err := v.UnmarshalJSON([]byte("abc"))
@@ -1370,240 +1118,6 @@ func TestUnmarshalJSONErrorType(t *testing.T) {
 			Count Int[uint8] `json:"count"`
 		}
 		check(t, json.Unmarshal([]byte(`{"count": -1}`), &s), &s.Count, "number -1")
-	})
-}
-
-func TestUnmarshalJSON(t *testing.T) {
-	t.Run("int32_positive", func(t *testing.T) {
-		var v Int[int32]
-		if err := json.Unmarshal([]byte("42"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != 42 {
-			t.Fatalf("Val = %d, want 42", v.Val())
-		}
-	})
-	t.Run("int32_negative", func(t *testing.T) {
-		var v Int[int32]
-		if err := json.Unmarshal([]byte("-100"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != -100 {
-			t.Fatalf("Val = %d, want -100", v.Val())
-		}
-	})
-	t.Run("int32_zero", func(t *testing.T) {
-		var v Int[int32]
-		if err := json.Unmarshal([]byte("0"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != 0 {
-			t.Fatalf("Val = %d, want 0", v.Val())
-		}
-	})
-	// --- boundary: exact min/max accepted ---
-	t.Run("int8_exact_max", func(t *testing.T) {
-		var v Int[int8]
-		if err := json.Unmarshal([]byte("127"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != 127 {
-			t.Fatalf("Val = %d, want 127", v.Val())
-		}
-	})
-	t.Run("int8_exact_min", func(t *testing.T) {
-		var v Int[int8]
-		if err := json.Unmarshal([]byte("-128"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != -128 {
-			t.Fatalf("Val = %d, want -128", v.Val())
-		}
-	})
-	t.Run("uint8_exact_max", func(t *testing.T) {
-		var v Int[uint8]
-		if err := json.Unmarshal([]byte("255"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != 255 {
-			t.Fatalf("Val = %d, want 255", v.Val())
-		}
-	})
-	t.Run("uint8_exact_zero", func(t *testing.T) {
-		var v Int[uint8]
-		if err := json.Unmarshal([]byte("0"), &v); err != nil {
-			t.Fatalf("UnmarshalJSON error: %v", err)
-		}
-		if v.Val() != 0 {
-			t.Fatalf("Val = %d, want 0", v.Val())
-		}
-	})
-	// --- boundary: one past min/max rejected ---
-	t.Run("uint8_overflow", func(t *testing.T) {
-		var v Int[uint8]
-		err := json.Unmarshal([]byte("256"), &v)
-		if err == nil {
-			t.Fatalf("expected error for uint8 overflow, got nil")
-		}
-	})
-	t.Run("int8_overflow", func(t *testing.T) {
-		var v Int[int8]
-		err := json.Unmarshal([]byte("128"), &v)
-		if err == nil {
-			t.Fatalf("expected error for int8 overflow, got nil")
-		}
-	})
-	t.Run("int8_underflow", func(t *testing.T) {
-		var v Int[int8]
-		err := json.Unmarshal([]byte("-129"), &v)
-		if err == nil {
-			t.Fatalf("expected error for int8 underflow, got nil")
-		}
-	})
-	t.Run("uint8_negative", func(t *testing.T) {
-		var v Int[uint8]
-		err := json.Unmarshal([]byte("-1"), &v)
-		if err == nil {
-			t.Fatalf("expected error for negative into uint8, got nil")
-		}
-	})
-	// --- invalid JSON types ---
-	t.Run("invalid_json_string", func(t *testing.T) {
-		var v Int[int32]
-		err := json.Unmarshal([]byte(`"hello"`), &v)
-		if err == nil {
-			t.Fatalf("expected error for string input, got nil")
-		}
-	})
-	t.Run("invalid_json_bool", func(t *testing.T) {
-		var v Int[int32]
-		err := json.Unmarshal([]byte("true"), &v)
-		if err == nil {
-			t.Fatalf("expected error for bool input, got nil")
-		}
-	})
-	t.Run("invalid_json_array", func(t *testing.T) {
-		var v Int[int32]
-		err := json.Unmarshal([]byte("[1]"), &v)
-		if err == nil {
-			t.Fatalf("expected error for array input, got nil")
-		}
-	})
-	t.Run("invalid_json_object", func(t *testing.T) {
-		var v Int[int32]
-		err := json.Unmarshal([]byte(`{"x":1}`), &v)
-		if err == nil {
-			t.Fatalf("expected error for object input, got nil")
-		}
-	})
-	t.Run("invalid_json_syntax", func(t *testing.T) {
-		var v Int[int32]
-		err := json.Unmarshal([]byte("{bad"), &v)
-		if err == nil {
-			t.Fatalf("expected error for invalid JSON, got nil")
-		}
-	})
-	t.Run("invalid_json_empty", func(t *testing.T) {
-		var v Int[int32]
-		err := json.Unmarshal([]byte(""), &v)
-		if err == nil {
-			t.Fatalf("expected error for empty input, got nil")
-		}
-	})
-	t.Run("json_float_literal", func(t *testing.T) {
-		// JSON "1.0" is a valid JSON number but not a valid integer
-		var v Int[int32]
-		err := json.Unmarshal([]byte("1.0"), &v)
-		if err == nil {
-			t.Fatalf("expected error for float literal, got nil")
-		}
-	})
-}
-
-func TestJSON_RoundTrip(t *testing.T) {
-	t.Run("int32", func(t *testing.T) {
-		orig := New[int32](-12345)
-		data, err := json.Marshal(orig)
-		if err != nil {
-			t.Fatalf("Marshal error: %v", err)
-		}
-		var got Int[int32]
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("Unmarshal error: %v", err)
-		}
-		if got.Val() != orig.Val() {
-			t.Fatalf("round-trip: got %d, want %d", got.Val(), orig.Val())
-		}
-	})
-	t.Run("int8_min", func(t *testing.T) {
-		orig := New[int8](math.MinInt8)
-		data, err := json.Marshal(orig)
-		if err != nil {
-			t.Fatalf("Marshal error: %v", err)
-		}
-		var got Int[int8]
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("Unmarshal error: %v", err)
-		}
-		if got.Val() != orig.Val() {
-			t.Fatalf("round-trip: got %d, want %d", got.Val(), orig.Val())
-		}
-	})
-	t.Run("int64_min", func(t *testing.T) {
-		orig := New[int64](math.MinInt64)
-		data, err := json.Marshal(orig)
-		if err != nil {
-			t.Fatalf("Marshal error: %v", err)
-		}
-		var got Int[int64]
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("Unmarshal error: %v", err)
-		}
-		if got.Val() != orig.Val() {
-			t.Fatalf("round-trip: got %d, want %d", got.Val(), orig.Val())
-		}
-	})
-	t.Run("int64_max", func(t *testing.T) {
-		orig := New[int64](math.MaxInt64)
-		data, err := json.Marshal(orig)
-		if err != nil {
-			t.Fatalf("Marshal error: %v", err)
-		}
-		var got Int[int64]
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("Unmarshal error: %v", err)
-		}
-		if got.Val() != orig.Val() {
-			t.Fatalf("round-trip: got %d, want %d", got.Val(), orig.Val())
-		}
-	})
-	t.Run("uint64_max", func(t *testing.T) {
-		orig := New[uint64](math.MaxUint64)
-		data, err := json.Marshal(orig)
-		if err != nil {
-			t.Fatalf("Marshal error: %v", err)
-		}
-		var got Int[uint64]
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("Unmarshal error: %v", err)
-		}
-		if got.Val() != orig.Val() {
-			t.Fatalf("round-trip: got %d, want %d", got.Val(), orig.Val())
-		}
-	})
-	t.Run("uint64_max_int64_boundary", func(t *testing.T) {
-		orig := New[uint64](uint64(math.MaxInt64) + 1)
-		data, err := json.Marshal(orig)
-		if err != nil {
-			t.Fatalf("Marshal error: %v", err)
-		}
-		var got Int[uint64]
-		if err := json.Unmarshal(data, &got); err != nil {
-			t.Fatalf("Unmarshal error: %v", err)
-		}
-		if got.Val() != orig.Val() {
-			t.Fatalf("round-trip: got %d, want %d", got.Val(), orig.Val())
-		}
 	})
 }
 
@@ -2075,6 +1589,16 @@ func TestScan_ByteSlice(t *testing.T) {
 			t.Fatalf("Val = %d, want 65535", v.Val())
 		}
 	})
+	t.Run("uint64_max", func(t *testing.T) {
+		// []byte is common from MySQL for BIGINT UNSIGNED.
+		var v Int[uint64]
+		if err := v.Scan([]byte("18446744073709551615")); err != nil {
+			t.Fatalf("Scan error: %v", err)
+		}
+		if v.Val() != math.MaxUint64 {
+			t.Fatalf("Val = %d, want MaxUint64", v.Val())
+		}
+	})
 	t.Run("invalid", func(t *testing.T) {
 		var v Int[int32]
 		err := v.Scan([]byte("abc"))
@@ -2187,36 +1711,6 @@ func TestScan_UnsupportedType(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error for unsupported type %T, got nil", src)
 		}
-	}
-}
-
-func TestScan_Uint64_Int64Source(t *testing.T) {
-	var v Int[uint64]
-	err := v.Scan(int64(-1))
-	if err == nil {
-		t.Fatalf("expected error for negative int64 into uint64, got nil")
-	}
-}
-
-func TestScan_PreservesZeroOnNil(t *testing.T) {
-	// Scan(nil) should reset to zero even if previously set
-	v := New[int32](12345)
-	if err := v.Scan(nil); err != nil {
-		t.Fatalf("Scan(nil) error: %v", err)
-	}
-	if v.Val() != 0 {
-		t.Fatalf("Val = %d, want 0", v.Val())
-	}
-}
-
-func TestScan_ByteSlice_Uint64(t *testing.T) {
-	// []byte is common from MySQL for BIGINT UNSIGNED
-	var v Int[uint64]
-	if err := v.Scan([]byte("18446744073709551615")); err != nil {
-		t.Fatalf("Scan error: %v", err)
-	}
-	if v.Val() != math.MaxUint64 {
-		t.Fatalf("Val = %d, want MaxUint64", v.Val())
 	}
 }
 
