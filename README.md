@@ -56,18 +56,17 @@ converted := safeint.MustConvert[int64, int32](a)
 
 ### 3. `Int[T]` Wrapper Type — method-based API
 
-JSON encoding and decoding use the underlying integer as a JSON number, even
-when `T` defines custom JSON methods. Decoding `null` or invalid input leaves
-the value unchanged; out-of-range numbers are rejected.
-
 A value-type wrapper providing three method families:
 
 ```go
 a := safeint.New[int64](100)
 b := safeint.New[int64](200)
 
-// Checked — returns (Int[T], bool)
+// Checked — returns (Int[T], ok bool); ok is false on overflow
 sum, ok := a.AddOverflow(b)
+if !ok {
+    // handle overflow
+}
 
 // Wrapping — silently wraps, like native Go
 sum := a.Add(b)
@@ -75,6 +74,10 @@ sum := a.Add(b)
 // Must — panics on overflow
 sum := a.MustAdd(b)
 ```
+
+> **Note:** The `*Overflow` methods return `ok == true` on success and `ok == false`
+> on overflow, like the checked functions above. This is the opposite of
+> holiman/uint256, whose `*Overflow` methods return `true` when overflow occurs.
 
 **Comparison methods:**
 
@@ -93,7 +96,23 @@ a.IsZero()
 ```go
 a.Val()        // returns the underlying T
 a.String()     // implements fmt.Stringer
+fmt.Sprintf("%x", a) // implements fmt.Formatter: integer verbs work like on T
 ```
+
+**Serialization:**
+
+- **JSON:** `Int[T]` encodes as a JSON number, even when `T` defines custom JSON
+  methods. Decoding `null` or invalid input leaves the value unchanged;
+  out-of-range numbers are rejected. `Int[T]` also works as a JSON object key
+  (through `encoding.TextMarshaler` and `encoding.TextUnmarshaler`).
+- **`json:",string"`:** this struct tag option has no effect on `Int[T]`,
+  because `encoding/json` applies it only to string, numeric and bool fields.
+  `Int[T]` always encodes as a JSON number and rejects JSON strings.
+- **JSON errors:** `encoding/json` does not add `Field` or document `Offset`
+  context to errors that `UnmarshalJSON` returns.
+- **SQL:** `Scan(nil)` (SQL `NULL`) sets the value to 0, so `NULL` and 0 cannot be
+  told apart. To keep `NULL` distinct, scan into `sql.Null[safeint.Int[T]]`
+  (Go 1.22+) or `sql.NullInt64`.
 
 **Cross-type conversion:**
 
@@ -144,6 +163,9 @@ Some edge cases worth noting:
 - **Neg on unsigned** — overflow for any non-zero value.
 - **Abs on signed MinInt** — overflow (|MinInt| > MaxInt).
 - **0^0** — returns `(1, true)` by convention.
+- **Pow overflow** — returns `false` and `base^exp` wrapped to `T`, the same value
+  that repeated native multiplication gives. For example, `Pow[int8](2, 8)`
+  returns `(0, false)`.
 
 ### Left Shift Contract
 

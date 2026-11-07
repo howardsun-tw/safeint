@@ -4,9 +4,11 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -939,6 +941,53 @@ func TestString(t *testing.T) {
 	}
 }
 
+// formatterInt defines its own Format method, which Int[T].Format must ignore.
+type formatterInt int64
+
+func (formatterInt) Format(f fmt.State, _ rune) { fmt.Fprint(f, "custom") }
+
+func TestFormat(t *testing.T) {
+	tests := []struct {
+		format string
+		arg    interface{}
+		want   string
+	}{
+		{"%d", New[int64](255), "255"},
+		{"%x", New[int64](255), "ff"},
+		{"%x", New[int64](-255), "-ff"},
+		{"%X", New[uint8](255), "FF"},
+		{"%#x", New[uint64](255), "0xff"},
+		{"%o", New[int8](8), "10"},
+		{"%b", New[uint8](5), "101"},
+		{"%c", New[int32](65), "A"},
+		{"%08d", New[int64](-42), "-0000042"},
+		{"%+d", New[int64](5), "+5"},
+		{"%-5d|", New[int32](7), "7    |"},
+		{"%.3d", New[int16](7), "007"},
+		{"%d", New[uint64](math.MaxUint64), "18446744073709551615"},
+		{"%v", New[int64](-7), "-7"},
+		{"%+v", New[int64](-7), "-7"},
+		{"%#v", New[int64](255), "255"},
+		{"%s", New[int64](255), "255"},
+		{"%6s", New[int64](255), "   255"},
+		{"%q", New[int64](255), `"255"`},
+		{"%v", struct{ N Int[uint8] }{New[uint8](9)}, "{9}"},
+		{"%v", New[stringerInt](25), "25"},
+		{"%x", New[formatterInt](255), "ff"},
+		{"%f", New[int64](3), "%!f(int64=3)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.format+"_"+fmt.Sprintf("%T", tc.arg), func(t *testing.T) {
+			if got := fmt.Sprintf(tc.format, tc.arg); got != tc.want {
+				t.Fatalf("Sprintf(%q) = %q, want %q", tc.format, got, tc.want)
+			}
+		})
+	}
+	if got := fmt.Sprint(New[int64](-3)); got != "-3" {
+		t.Fatalf("Sprint = %q, want %q", got, "-3")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 7. ConvertInt tests
 // ---------------------------------------------------------------------------
@@ -1608,6 +1657,73 @@ func TestJSON_StructField(t *testing.T) {
 	})
 }
 
+func TestJSON_MapKey(t *testing.T) {
+	t.Run("signed_roundtrip", func(t *testing.T) {
+		original := map[Int[int16]]string{New[int16](-3): "a", New[int16](10): "b"}
+		data, err := json.Marshal(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := `{"-3":"a","10":"b"}`; string(data) != want {
+			t.Fatalf("Marshal = %s, want %s", data, want)
+		}
+		var decoded map[Int[int16]]string
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(decoded, original) {
+			t.Fatalf("decoded = %v, want %v", decoded, original)
+		}
+	})
+	t.Run("unsigned_max_roundtrip", func(t *testing.T) {
+		original := map[Int[uint64]]int{New[uint64](math.MaxUint64): 1}
+		data, err := json.Marshal(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := `{"18446744073709551615":1}`; string(data) != want {
+			t.Fatalf("Marshal = %s, want %s", data, want)
+		}
+		var decoded map[Int[uint64]]int
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(decoded, original) {
+			t.Fatalf("decoded = %v, want %v", decoded, original)
+		}
+	})
+	for _, data := range []string{`{"x":1}`, `{"40000":1}`, `{"1.5":1}`} {
+		t.Run("rejects_"+data, func(t *testing.T) {
+			var decoded map[Int[int16]]int
+			err := json.Unmarshal([]byte(data), &decoded)
+			// The error must come from UnmarshalText, not from encoding/json
+			// rejecting the key type.
+			if err == nil || !strings.HasPrefix(err.Error(), "safeint: ") {
+				t.Fatalf("Unmarshal(%s) error = %v, want a safeint key parse error", data, err)
+			}
+		})
+	}
+}
+
+func TestUnmarshalText(t *testing.T) {
+	v := New[int8](7)
+	for _, text := range []string{"128", "-129", "abc", "", "1.5"} {
+		if err := v.UnmarshalText([]byte(text)); err == nil {
+			t.Fatalf("UnmarshalText(%q) = nil error", text)
+		}
+		if v.Val() != 7 {
+			t.Fatalf("UnmarshalText(%q) changed value to %d", text, v.Val())
+		}
+	}
+	if err := v.UnmarshalText([]byte("-128")); err != nil || v.Val() != -128 {
+		t.Fatalf("UnmarshalText(-128) = %v, value %d", err, v.Val())
+	}
+	u := New[uint8](7)
+	if err := u.UnmarshalText([]byte("-1")); err == nil || u.Val() != 7 {
+		t.Fatalf("UnmarshalText(-1) into uint8 = %v, value %d", err, u.Val())
+	}
+}
+
 // ---------------------------------------------------------------------------
 // SQL driver.Valuer tests
 // ---------------------------------------------------------------------------
@@ -2259,4 +2375,59 @@ func TestSQL_RoundTrip(t *testing.T) {
 			}
 		}
 	})
+}
+
+func BenchmarkUnmarshalJSON(b *testing.B) {
+	data := []byte(`[1,-22,333,-4444,55555,-666666,7777777,-88888888,999999999,0]`)
+	b.Run("Int[int64]", func(b *testing.B) {
+		var v []Int[int64]
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if err := json.Unmarshal(data, &v); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("native_int64", func(b *testing.B) {
+		var v []int64
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			if err := json.Unmarshal(data, &v); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// FuzzUnmarshalJSONFastPath checks that UnmarshalJSON, including its fast
+// path, gives the same value and error as the general decodeJSONNumber path.
+func FuzzUnmarshalJSONFastPath(f *testing.F) {
+	for _, s := range []string{
+		"0", "-0", "1", "-1", "00", "01", "-01", "-", "+1", " 1", "1 ", "1.0", "1e2",
+		"127", "128", "-128", "-129", "255", "256",
+		"9223372036854775807", "9223372036854775808",
+		"-9223372036854775808", "-9223372036854775809",
+		"18446744073709551615", "18446744073709551616",
+		"null", `"1"`, "", "1a", "true", "[]",
+	} {
+		f.Add([]byte(s))
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		checkJSONFastPath[int8](t, data)
+		checkJSONFastPath[uint8](t, data)
+		checkJSONFastPath[int64](t, data)
+		checkJSONFastPath[uint64](t, data)
+		checkJSONFastPath[jsonQuotedUint](t, data)
+	})
+}
+
+func checkJSONFastPath[T Integer](t *testing.T, data []byte) {
+	t.Helper()
+	got, want := New(T(7)), New(T(7))
+	gotErr := got.UnmarshalJSON(data)
+	wantErr := want.decodeJSONNumber(data)
+	if got != want || !reflect.DeepEqual(gotErr, wantErr) {
+		t.Fatalf("%T input %q: UnmarshalJSON = (%d, %v), decodeJSONNumber = (%d, %v)",
+			got, data, got.Val(), gotErr, want.Val(), wantErr)
+	}
 }

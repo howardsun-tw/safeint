@@ -125,6 +125,8 @@ func Abs[T Integer](a T) (T, bool) {
 }
 
 // Pow returns base^exp and true if no intermediate or final overflow occurs.
+// On overflow it returns false and base^exp wrapped to T, the same value
+// that repeated native multiplication produces, like Add and Mul.
 // Uses binary exponentiation. 0^0 returns (1, true) by convention.
 func Pow[T Integer](base T, exp uint) (T, bool) {
 	if exp == 0 {
@@ -133,26 +135,28 @@ func Pow[T Integer](base T, exp uint) (T, bool) {
 	if base == 1 {
 		return 1, true
 	}
+	// Keep multiplying after an overflow: Mul returns the wrapped product,
+	// and wrapped multiplication gives base^exp modulo 2^bits. An overflow
+	// in any intermediate step implies the exact result overflows, because
+	// |base| >= 2 whenever Mul can overflow and every intermediate value
+	// divides the final power.
 	result := T(1)
 	b := base
+	fits := true
 	for exp > 0 {
 		if exp&1 == 1 {
 			var ok bool
 			result, ok = Mul(result, b)
-			if !ok {
-				return result, false
-			}
+			fits = fits && ok
 		}
 		exp >>= 1
 		if exp > 0 {
 			var ok bool
 			b, ok = Mul(b, b)
-			if !ok {
-				return result, false
-			}
+			fits = fits && ok
 		}
 	}
-	return result, true
+	return result, fits
 }
 
 // Lsh returns the left-shifted value and whether the result fits in T:
@@ -279,7 +283,7 @@ func mulDiv64Signed[T Integer](a, b, c T) (T, bool) {
 	quo, _ := bits.Div64(hi, lo, uc)
 
 	if negative {
-		// Result must fit as negative T: quo <= uint64(maxValue[int64]()) + 1
+		// Result must fit as negative T: quo <= uint64(maxSigned64) + 1
 		if quo > uint64(maxSigned64)+1 {
 			return 0, false
 		}

@@ -1101,9 +1101,9 @@ func TestPow(t *testing.T) {
 
 	// 2^7 = 128
 	t.Run("2^7_int8_overflow", func(t *testing.T) {
-		_, ok := Pow[int8](2, 7)
-		if ok {
-			t.Error("Pow[int8](2,7): ok=true, want false (128 overflows int8)")
+		r, ok := Pow[int8](2, 7)
+		if ok || r != -128 {
+			t.Errorf("Pow[int8](2,7): got=(%d,%v), want=(%d,false) (128 overflows int8; wrapped value is -128)", r, ok, -128)
 		}
 	})
 	t.Run("2^7_uint8_ok", func(t *testing.T) {
@@ -1113,9 +1113,9 @@ func TestPow(t *testing.T) {
 		}
 	})
 	t.Run("2^8_uint8_overflow", func(t *testing.T) {
-		_, ok := Pow[uint8](2, 8)
-		if ok {
-			t.Error("Pow[uint8](2,8): ok=true, want false (256 overflows uint8)")
+		r, ok := Pow[uint8](2, 8)
+		if ok || r != 0 {
+			t.Errorf("Pow[uint8](2,8): got=(%d,%v), want=(%d,false) (256 overflows uint8; wrapped value is 0)", r, ok, 0)
 		}
 	})
 
@@ -1127,9 +1127,9 @@ func TestPow(t *testing.T) {
 		}
 	})
 	t.Run("2^63_int64_overflow", func(t *testing.T) {
-		_, ok := Pow[int64](2, 63)
-		if ok {
-			t.Error("Pow[int64](2,63): ok=true, want false")
+		r, ok := Pow[int64](2, 63)
+		if ok || r != math.MinInt64 {
+			t.Errorf("Pow[int64](2,63): got=(%d,%v), want=(%d,false) (wrapped value is MinInt64)", r, ok, int64(math.MinInt64))
 		}
 	})
 	t.Run("2^63_uint64_ok", func(t *testing.T) {
@@ -1139,9 +1139,9 @@ func TestPow(t *testing.T) {
 		}
 	})
 	t.Run("2^64_uint64_overflow", func(t *testing.T) {
-		_, ok := Pow[uint64](2, 64)
-		if ok {
-			t.Error("Pow[uint64](2,64): ok=true, want false")
+		r, ok := Pow[uint64](2, 64)
+		if ok || r != 0 {
+			t.Errorf("Pow[uint64](2,64): got=(%d,%v), want=(%d,false) (wrapped value is 0)", r, ok, 0)
 		}
 	})
 
@@ -1153,9 +1153,24 @@ func TestPow(t *testing.T) {
 		}
 	})
 	t.Run("3^6_uint8_overflow", func(t *testing.T) {
-		_, ok := Pow[uint8](3, 6)
-		if ok {
-			t.Error("Pow[uint8](3,6): ok=true, want false (729 overflows uint8)")
+		r, ok := Pow[uint8](3, 6)
+		if ok || r != 217 {
+			t.Errorf("Pow[uint8](3,6): got=(%d,%v), want=(%d,false) (729 overflows uint8; wrapped value is 729-512=217)", r, ok, 217)
+		}
+	})
+
+	// The overflow happens while squaring the base (2^8 for int8) or while
+	// multiplying into the result (3^5 for int8). Both return the wrapped value.
+	t.Run("2^8_int8_overflow_wraps", func(t *testing.T) {
+		r, ok := Pow[int8](2, 8)
+		if ok || r != 0 {
+			t.Errorf("Pow[int8](2,8): got=(%d,%v), want=(0,false)", r, ok)
+		}
+	})
+	t.Run("3^5_int8_overflow_wraps", func(t *testing.T) {
+		r, ok := Pow[int8](3, 5)
+		if ok || r != -13 {
+			t.Errorf("Pow[int8](3,5): got=(%d,%v), want=(-13,false)", r, ok)
 		}
 	})
 
