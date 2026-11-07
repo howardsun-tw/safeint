@@ -144,16 +144,22 @@ func Pow[T Integer](base T, exp uint) (T, bool) {
 	b := base
 	fits := true
 	for exp > 0 {
+		// After the first overflow, only the wrapped value is needed, so
+		// native multiplication replaces the checked Mul.
 		if exp&1 == 1 {
-			var ok bool
-			result, ok = Mul(result, b)
-			fits = fits && ok
+			if fits {
+				result, fits = Mul(result, b)
+			} else {
+				result *= b
+			}
 		}
 		exp >>= 1
 		if exp > 0 {
-			var ok bool
-			b, ok = Mul(b, b)
-			fits = fits && ok
+			if fits {
+				b, fits = Mul(b, b)
+			} else {
+				b *= b
+			}
 		}
 	}
 	return result, fits

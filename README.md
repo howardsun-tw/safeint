@@ -111,8 +111,8 @@ fmt.Sprintf("%x", a) // implements fmt.Formatter: integer verbs work like on T
   that `UnmarshalJSON` returns. Go 1.26 and earlier set `Field`; the default
   `encoding/json` in Go 1.27 leaves it empty.
 - **SQL:** `Scan(nil)` (SQL `NULL`) sets the value to 0, so `NULL` and 0 cannot be
-  told apart. To keep `NULL` distinct, scan into `sql.Null[safeint.Int[T]]`
-  (Go 1.22+) or `sql.NullInt64`.
+  told apart. To keep `NULL` distinct, use `sql.Null[safeint.Int[T]]` (Go 1.24+;
+  on Go 1.22 and 1.23 it works for scanning only) or `sql.NullInt64`.
 
 **Cross-type conversion:**
 

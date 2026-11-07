@@ -325,7 +325,8 @@ func (a *Int[T]) UnmarshalJSON(data []byte) error {
 	// including null, whitespace and every invalid or out-of-range value,
 	// goes through decodeJSONNumber so results and errors stay identical.
 	// This path does not share scanString: building scanString's error
-	// makes string(data) escape, which costs an allocation per value.
+	// makes string(data) escape. Without that, strconv in Go 1.20+ keeps
+	// string(data) on the stack, so this path does not allocate.
 	if isCanonicalJSONInteger(data) {
 		var value T
 		ok := false
@@ -420,8 +421,9 @@ func (a Int[T]) Value() (driver.Value, error) {
 //
 // A nil src (SQL NULL) sets the value to 0 and returns nil, so NULL and 0
 // cannot be told apart after Scan. This differs from UnmarshalJSON, which
-// leaves the value unchanged on null. To keep NULL distinct, scan into
-// sql.Null[Int[T]] (Go 1.22+) or sql.NullInt64.
+// leaves the value unchanged on null. To keep NULL distinct, use
+// sql.Null[Int[T]] (Go 1.24+; on Go 1.22 and 1.23 its Value method returns
+// the Int[T] itself, so only scanning works) or sql.NullInt64.
 func (a *Int[T]) Scan(src interface{}) error {
 	if src == nil {
 		a.val = 0
