@@ -210,8 +210,9 @@ results). This covers Add, Sub, Mul, Div, DivMod, Mod, Neg, Abs, MulDiv, MulMod
 and Convert (to every integer type). Pow and Lsh use every base and a fixed set
 of exponents and shift counts. Both the result and `ok` are checked, including
 the documented result on overflow. For 16-, 32- and 64-bit types, Add, Sub,
-Mul and Div are checked on boundary value pairs against `math/big`; the other
-operations have targeted edge-case tests.
+Mul and Div are checked on boundary value pairs against `math/big`, and MulDiv
+and MulMod on every triple of those boundary values. The other operations have
+targeted edge-case tests.
 
 ```
 go test ./...

@@ -290,13 +290,59 @@ func unsignedBoundaryPairs[T Unsigned]() [][2]T {
 	}
 }
 
+// checkBoundaryTriples runs MulDiv and MulMod on every triple of values that
+// appear in pairs, against exact math/big arithmetic. MulDiv wants the
+// quotient when it fits in T and (0, false) otherwise. MulMod wants the
+// remainder, which always fits. Both want (0, false) when c == 0.
+func checkBoundaryTriples[T Integer](t *testing.T, pairs [][2]T) {
+	t.Helper()
+	seen := map[T]bool{}
+	var vals []T
+	for _, p := range pairs {
+		for _, v := range p {
+			if !seen[v] {
+				seen[v] = true
+				vals = append(vals, v)
+			}
+		}
+	}
+	lo, hi := boundsOf[T]()
+	for _, a := range vals {
+		for _, b := range vals {
+			for _, c := range vals {
+				var wq, wr T
+				var qok bool
+				if c != 0 {
+					exact := new(big.Int).Mul(toBig(a), toBig(b))
+					q, r := new(big.Int).QuoRem(exact, toBig(c), new(big.Int))
+					if q.Cmp(lo) >= 0 && q.Cmp(hi) <= 0 {
+						wq, qok = wrapBig[T](q), true
+					}
+					wr = wrapBig[T](r)
+				}
+				if got, ok := MulDiv(a, b, c); got != wq || ok != qok {
+					t.Errorf("MulDiv(%d, %d, %d) = (%d, %v), want (%d, %v)", a, b, c, got, ok, wq, qok)
+				}
+				if got, ok := MulMod(a, b, c); got != wr || ok != (c != 0) {
+					t.Errorf("MulMod(%d, %d, %d) = (%d, %v), want (%d, %v)", a, b, c, got, ok, wr, c != 0)
+				}
+			}
+		}
+	}
+}
+
 func TestBoundary(t *testing.T) {
-	t.Run("int16", func(t *testing.T) { checkBoundaryPairs(t, signedBoundaryPairs[int16]()) })
-	t.Run("int32", func(t *testing.T) { checkBoundaryPairs(t, signedBoundaryPairs[int32]()) })
-	t.Run("int64", func(t *testing.T) { checkBoundaryPairs(t, signedBoundaryPairs[int64]()) })
-	t.Run("uint16", func(t *testing.T) { checkBoundaryPairs(t, unsignedBoundaryPairs[uint16]()) })
-	t.Run("uint32", func(t *testing.T) { checkBoundaryPairs(t, unsignedBoundaryPairs[uint32]()) })
-	t.Run("uint64", func(t *testing.T) { checkBoundaryPairs(t, unsignedBoundaryPairs[uint64]()) })
+	t.Run("int16", func(t *testing.T) { testBoundary(t, signedBoundaryPairs[int16]()) })
+	t.Run("int32", func(t *testing.T) { testBoundary(t, signedBoundaryPairs[int32]()) })
+	t.Run("int64", func(t *testing.T) { testBoundary(t, signedBoundaryPairs[int64]()) })
+	t.Run("uint16", func(t *testing.T) { testBoundary(t, unsignedBoundaryPairs[uint16]()) })
+	t.Run("uint32", func(t *testing.T) { testBoundary(t, unsignedBoundaryPairs[uint32]()) })
+	t.Run("uint64", func(t *testing.T) { testBoundary(t, unsignedBoundaryPairs[uint64]()) })
+}
+
+func testBoundary[T Integer](t *testing.T, pairs [][2]T) {
+	checkBoundaryPairs(t, pairs)
+	checkBoundaryTriples(t, pairs)
 }
 
 // ---------------------------------------------------------------------------

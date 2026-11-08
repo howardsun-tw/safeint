@@ -520,142 +520,56 @@ func TestMustDiv(t *testing.T) {
 // 5. Comparison tests
 // ---------------------------------------------------------------------------
 
-func TestCmp(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[int64]
+// checkCompare checks Cmp, Eq, Lt, Gt, Lte and Gte on (a, b) against want,
+// the expected sign of a - b computed without overflow.
+func checkCompare[T Integer](t *testing.T, a, b T, want int) {
+	t.Helper()
+	x, y := New(a), New(b)
+	got := []bool{x.Eq(y), x.Lt(y), x.Gt(y), x.Lte(y), x.Gte(y)}
+	exp := []bool{want == 0, want < 0, want > 0, want <= 0, want >= 0}
+	names := []string{"Eq", "Lt", "Gt", "Lte", "Gte"}
+	if c := x.Cmp(y); c != want {
+		t.Errorf("%T: Cmp(%d, %d) = %d, want %d", a, a, b, c, want)
+	}
+	for i := range got {
+		if got[i] != exp[i] {
+			t.Errorf("%T: %s(%d, %d) = %v, want %v", a, names[i], a, b, got[i], exp[i])
+		}
+	}
+}
+
+// TestCompare includes pairs whose difference overflows T, so an
+// implementation that compares by subtraction fails.
+func TestCompare(t *testing.T) {
+	int64Pairs := []struct {
+		a, b int64
 		want int
 	}{
-		{"less", New[int64](1), New[int64](2), -1},
-		{"equal", New[int64](42), New[int64](42), 0},
-		{"greater", New[int64](10), New[int64](5), 1},
-		{"negative_less", New[int64](-5), New[int64](3), -1},
-		{"negative_greater", New[int64](3), New[int64](-5), 1},
-		{"both_negative", New[int64](-10), New[int64](-5), -1},
+		{1, 2, -1}, {42, 42, 0}, {10, 5, 1}, {-5, 3, -1}, {3, -5, 1}, {-10, -5, -1}, {-7, -7, 0},
+		{math.MinInt64, 1, -1}, {1, math.MinInt64, 1},
+		{math.MinInt64, math.MaxInt64, -1}, {math.MaxInt64, math.MinInt64, 1},
+		{math.MaxInt64, -1, 1}, {math.MinInt64, math.MinInt64, 0},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.a.Cmp(tc.b)
-			if got != tc.want {
-				t.Fatalf("Cmp = %d, want %d", got, tc.want)
-			}
-		})
+	for _, p := range int64Pairs {
+		checkCompare(t, p.a, p.b, p.want)
 	}
-}
-
-func TestCmpUnsigned(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[uint8]
+	uint8Pairs := []struct {
+		a, b uint8
 		want int
 	}{
-		{"less", New[uint8](0), New[uint8](255), -1},
-		{"equal", New[uint8](128), New[uint8](128), 0},
-		{"greater", New[uint8](255), New[uint8](0), 1},
+		{0, 255, -1}, {128, 128, 0}, {255, 0, 1}, {1, 2, -1},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.a.Cmp(tc.b)
-			if got != tc.want {
-				t.Fatalf("Cmp = %d, want %d", got, tc.want)
-			}
-		})
+	for _, p := range uint8Pairs {
+		checkCompare(t, p.a, p.b, p.want)
 	}
-}
-
-func TestEq(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[int64]
-		want bool
+	uint64Pairs := []struct {
+		a, b uint64
+		want int
 	}{
-		{"equal", New[int64](42), New[int64](42), true},
-		{"not_equal", New[int64](42), New[int64](43), false},
-		{"neg_equal", New[int64](-7), New[int64](-7), true},
+		{0, math.MaxUint64, -1}, {math.MaxUint64, 0, 1}, {math.MaxUint64, math.MaxUint64, 0}, {1, 1 << 63, -1},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.Eq(tc.b); got != tc.want {
-				t.Fatalf("Eq = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestLt(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[int64]
-		want bool
-	}{
-		{"true", New[int64](1), New[int64](2), true},
-		{"false_equal", New[int64](2), New[int64](2), false},
-		{"false_greater", New[int64](3), New[int64](2), false},
-		{"negative_true", New[int64](-5), New[int64](3), true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.Lt(tc.b); got != tc.want {
-				t.Fatalf("Lt = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestGt(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[int64]
-		want bool
-	}{
-		{"true", New[int64](3), New[int64](2), true},
-		{"false_equal", New[int64](2), New[int64](2), false},
-		{"false_less", New[int64](1), New[int64](2), false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.Gt(tc.b); got != tc.want {
-				t.Fatalf("Gt = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestLte(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[int64]
-		want bool
-	}{
-		{"less", New[int64](1), New[int64](2), true},
-		{"equal", New[int64](2), New[int64](2), true},
-		{"greater", New[int64](3), New[int64](2), false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.Lte(tc.b); got != tc.want {
-				t.Fatalf("Lte = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestGte(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b Int[int64]
-		want bool
-	}{
-		{"greater", New[int64](3), New[int64](2), true},
-		{"equal", New[int64](2), New[int64](2), true},
-		{"less", New[int64](1), New[int64](2), false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.Gte(tc.b); got != tc.want {
-				t.Fatalf("Gte = %v, want %v", got, tc.want)
-			}
-		})
+	for _, p := range uint64Pairs {
+		checkCompare(t, p.a, p.b, p.want)
 	}
 }
 
@@ -730,6 +644,7 @@ func TestFormat(t *testing.T) {
 		{"%c", New[int32](65), "A"},
 		{"%08d", New[int64](-42), "-0000042"},
 		{"%+d", New[int64](5), "+5"},
+		{"% d", New[int64](5), " 5"},
 		{"%-5d|", New[int32](7), "7    |"},
 		{"%.3d", New[int16](7), "007"},
 		{"%d", New[uint64](math.MaxUint64), "18446744073709551615"},
