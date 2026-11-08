@@ -13,11 +13,14 @@ jobs:
       matrix:
         go-version: ['1.24', '1.25', '1.26', '1.27.3']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
+          # The module has no dependencies and no go.sum, so there is
+          # nothing to cache.
+          cache: false
 
       - name: Test
         run: go test -v -race -count=1 ./...
