@@ -16,10 +16,10 @@ CHECKS=[
  ('extended-decode-unsigned','DecodeState','current',None),
  ('extended-roundtrip-signed','SerializationRoundTrip','current',None),
  ('extended-roundtrip-unsigned','SerializationRoundTrip','current',None),
- ('extended-named-plain','NamedTypeCodec','current',None),
- ('extended-named-quoted','NamedTypeCodec','candidate','WrappedRoundTrip'),
- ('extended-named-index','NamedTypeCodec','candidate','WrappedRoundTrip'),
- ('extended-named-numeric','NamedTypeCodec','counterfactual',None),
+ ('extended-named-numeric','NamedTypeCodec','current',None),
+ ('extended-named-legacy-plain','NamedTypeCodec','legacy',None),
+ ('extended-named-legacy-quoted','NamedTypeCodec','legacy','WrappedRoundTrip'),
+ ('extended-named-legacy-index','NamedTypeCodec','legacy','WrappedRoundTrip'),
  ('extended-named-delegate','NamedTypeCodec','counterfactual',None),
  ('extended-api-signed','APIFamilyConsistency','current',None),
  ('extended-api-unsigned','APIFamilyConsistency','current',None),
@@ -64,5 +64,5 @@ for name,module,kind,expected in CHECKS:
  print(f'{name}: exit={code}, invariant={observed}, expectation_met={correct}, kind={kind}',flush=True)
 assert len(summary['checks'])==EXPECTED
 bad=[r for r in summary['checks'] if not r['expectation_met']]
-print(f'Completed {EXPECTED}/{EXPECTED} checks; {len(bad)} unexpected outcomes. Candidate violations require Go replay.',flush=True)
+print(f'Completed {EXPECTED}/{EXPECTED} checks; {len(bad)} unexpected outcomes. Expected violations are controls, not proofs.',flush=True)
 raise SystemExit(1 if bad else 0)

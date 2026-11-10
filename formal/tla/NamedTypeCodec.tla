@@ -1,6 +1,11 @@
 ---------------------------- MODULE NamedTypeCodec ----------------------------
 EXTENDS Integers
 CONSTANTS Codecs, Policy
+\* "numeric" is what Int[T].MarshalJSON and UnmarshalJSON implement: both
+\* directions use the plain number and ignore T's custom codec. "legacy" is the
+\* behavior before 24cd137: encode as a number, decode through T. "delegate" is
+\* a counterfactual that uses T's codec in both directions.
+ASSUME Policy \in {"numeric","legacy","delegate"}
 VARIABLES original, codec, wire, decoded, ok, phase
 vars == <<original,codec,wire,decoded,ok,phase>>
 Number(v) == [kind |-> "number",number |-> v]

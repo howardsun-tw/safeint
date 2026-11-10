@@ -1,15 +1,16 @@
 # Extended formal audit
 
-Follow-up: the finding is fixed. `Int[T]` now uses the numeric JSON policy in
-both directions, and `replay.go` asserts preserved values for both custom codecs.
-The results below remain the historical pre-fix audit pinned to `e030f05`; they
-are not verification of the current implementation.
+Follow-up: the finding is fixed in `24cd137`. `Int[T]` now uses the numeric JSON
+policy in both directions, and `replay.go` asserts preserved values for both
+custom codecs.
 
-In `NamedTypeCodec.tla`, `Policy="current"` still models the pre-fix behavior, so
-`verify_extended.py` still expects the two `candidate` violations.
-`extended-named-numeric.cfg` models the policy the code now implements.
-Post-fix checks were recorded under `review-artifacts/json-codec-fix/`, which
-Git ignores.
+The models follow the fix. In `NamedTypeCodec.tla`, `Policy="numeric"` is the
+current implementation and `Policy="legacy"` is the pre-fix behavior, kept as a
+control. The TLC results below were rerun on 2026-11-10 with these names. The
+finding, the Z3 results and the concrete verification below remain the pre-fix
+audit pinned to `e030f05`; they are not verification of the current
+implementation. Post-fix checks were recorded under
+`review-artifacts/json-codec-fix/`, which Git ignores.
 
 Audited source: `e030f05c3cae2effb67c939c5b4d15bd7bdcf4cf` (2026-09-08).
 No package implementation was changed. Models and replay programs are handwritten
@@ -44,18 +45,19 @@ unmarshalers that mutate themselves before returning an error.
 
 All 15 configurations completed with their expected outcomes, visiting 25,198
 distinct states in total across runs. This includes intentional invariant
-violations; it does not mean every current behavior satisfied its contract.
+violations; it does not mean every configuration satisfied its invariants.
 
 | Model | Scope | Outcome |
 | --- | --- | --- |
 | `DecodeState` | Signed/unsigned 4-bit integers, three decode calls, JSON/SQL input categories | Current configurations pass; null-clearing mutation is caught |
 | `SerializationRoundTrip` | Signed/unsigned 8-bit values, JSON and SQL | Current configurations pass; high unsigned truncation mutation is caught |
-| `NamedTypeCodec` | Values 1 through 7, plain/string/index codecs | Plain passes; both custom codecs violate wrapped roundtrip; two symmetric policy alternatives pass |
+| `NamedTypeCodec` | Values 1 through 7, plain/string/index codecs | The numeric policy (current) passes for all three codecs. The legacy policy passes for plain and violates wrapped roundtrip for both custom codecs. The delegate policy (counterfactual) passes |
 | `APIFamilyConsistency` | Signed/unsigned 4-bit Add/Sub/Mul/Div | Current configurations pass; incorrect flag and input mutation controls are caught |
 
-Classification: 7 passing current configurations, 2 candidate violations,
-2 passing counterfactual policies, and 4 deliberately failing negative controls.
-The two candidate traces were subsequently confirmed by Go replay.
+Classification: 7 passing current configurations, 3 legacy configurations
+(1 passing, 2 violating), 1 passing counterfactual policy, and 4 deliberately
+failing negative controls. Go replay at `e030f05` confirmed the two legacy
+violation traces as the defect described above.
 
 Parsing and wire payloads are abstracted, including SQL's signed intermediate:
 the bounded model uses the modeled word width, while production uses int64.
