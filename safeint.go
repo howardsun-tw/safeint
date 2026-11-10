@@ -377,6 +377,9 @@ func MustMul[T Integer](a, b T) T {
 
 // MustDiv returns a / b, panicking on overflow or division by zero.
 func MustDiv[T Integer](a, b T) T {
+	if b == 0 {
+		panic("safeint: Div by zero")
+	}
 	r, ok := Div(a, b)
 	if !ok {
 		panic("safeint: Div overflow")
@@ -395,6 +398,9 @@ func MustNeg[T Integer](a T) T {
 
 // MustMulDiv returns (a*b)/c, panicking on overflow or division by zero.
 func MustMulDiv[T Integer](a, b, c T) T {
+	if c == 0 {
+		panic("safeint: MulDiv by zero")
+	}
 	r, ok := MulDiv(a, b, c)
 	if !ok {
 		panic("safeint: MulDiv overflow")

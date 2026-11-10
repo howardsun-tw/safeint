@@ -47,7 +47,7 @@ Convenience wrappers that panic instead of returning a bool. Useful for cases wh
 ```go
 sum := safeint.MustAdd(a, b)       // panics: "safeint: Add overflow"
 product := safeint.MustMul(a, b)
-quotient := safeint.MustDiv(a, b)
+quotient := safeint.MustDiv(a, b)  // panics: "safeint: Div by zero" when b == 0
 negated := safeint.MustNeg(a)
 converted := safeint.MustConvert[int64, int32](a)
 ```

@@ -1368,7 +1368,7 @@ func TestMustDivStandalone(t *testing.T) {
 		})
 	})
 	t.Run("div_by_zero", func(t *testing.T) {
-		expectPanic(t, "MustDiv(1,0)", "safeint: Div overflow", func() {
+		expectPanic(t, "MustDiv(1,0)", "safeint: Div by zero", func() {
 			MustDiv[int64](1, 0)
 		})
 	})
@@ -1404,8 +1404,8 @@ func TestMustMulDivStandalone(t *testing.T) {
 			}
 		})
 	})
-	t.Run("overflow_c_zero", func(t *testing.T) {
-		expectPanic(t, "MustMulDiv(1,2,0)", "safeint: MulDiv overflow", func() {
+	t.Run("c_zero", func(t *testing.T) {
+		expectPanic(t, "MustMulDiv(1,2,0)", "safeint: MulDiv by zero", func() {
 			MustMulDiv[int64](1, 2, 0)
 		})
 	})

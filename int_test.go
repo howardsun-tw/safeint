@@ -505,7 +505,7 @@ func TestMustDiv(t *testing.T) {
 		}
 	})
 	t.Run("div_by_zero_panics", func(t *testing.T) {
-		expectPanic(t, "MustDiv div-by-zero", "safeint: Div overflow", func() {
+		expectPanic(t, "MustDiv div-by-zero", "safeint: Div by zero", func() {
 			New[int8](1).MustDiv(New[int8](0))
 		})
 	})
