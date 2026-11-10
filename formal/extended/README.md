@@ -1,10 +1,15 @@
 # Extended formal audit
 
-Follow-up: the working tree now fixes the finding using the numeric JSON policy.
-`replay.go` now asserts preserved values for both custom codecs. The results and
-raw logs below remain the historical pre-fix audit pinned to `e030f05`; they are
-not verification of the modified implementation. Post-fix checks are recorded
-separately under `review-artifacts/json-codec-fix/`.
+Follow-up: the finding is fixed. `Int[T]` now uses the numeric JSON policy in
+both directions, and `replay.go` asserts preserved values for both custom codecs.
+The results below remain the historical pre-fix audit pinned to `e030f05`; they
+are not verification of the current implementation.
+
+In `NamedTypeCodec.tla`, `Policy="current"` still models the pre-fix behavior, so
+`verify_extended.py` still expects the two `candidate` violations.
+`extended-named-numeric.cfg` models the policy the code now implements.
+Post-fix checks were recorded under `review-artifacts/json-codec-fix/`, which
+Git ignores.
 
 Audited source: `e030f05c3cae2effb67c939c5b4d15bd7bdcf4cf` (2026-09-08).
 No package implementation was changed. Models and replay programs are handwritten
@@ -87,8 +92,8 @@ oracle described below; sampled tests cannot replace the unknown proof.
   and result agreement, and input immutability. Exercises all ten supported
   built-in integer types plus `PlainInt`, using 47 boundary/seeded values per
   type. Covers all checked arithmetic wrappers; the four Must methods are
-  compared with their standalone counterparts. The replay deliberately expects
-  the confirmed custom-codec defect and must change when that defect is fixed.
+  compared with their standalone counterparts. At `e030f05` the replay expected
+  the confirmed custom-codec defect; it now asserts the fixed behavior.
 - Existing arithmetic replay: **1,895,122 assertions** passed against independent
   big-integer/rational expectations, plus two current Lsh contract checks.
 - `go test -race -count=1 -json .`: **943 test/subtest pass events**, zero failures,
@@ -115,8 +120,9 @@ need their own working `z3` Python module. TLC uses the pinned jar verified by
 the runner, Java 17, one worker, seed 73, and a 180-second per-run timeout.
 
 Git ignores `review-artifacts/`, so the raw evidence is not in the repository.
-The verifier commands above write fresh TLC and Z3 output there for the
-current source.
+The two verifier commands above write fresh `tlc/` and `z3/` output there for
+the current source. No command regenerates the other files listed below; they
+exist only where the audit ran.
 
 Raw evidence is under `review-artifacts/extended-models/`: `tlc/summary.json`
 and per-configuration traces, `z3/summary.json` and all 73 SMT2 queries,
