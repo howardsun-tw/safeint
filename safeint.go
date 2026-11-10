@@ -92,8 +92,8 @@ func DivMod[T Integer](a, b T) (T, T, bool) {
 	if b == 0 {
 		return 0, 0, false
 	}
-	// Defense-in-depth: explicit MinInt / -1 check.
-	// Go guarantees wrapping here (no panic), but we detect it as overflow.
+	// MinInt / -1 is the only quotient that overflows. Go wraps it to MinInt
+	// without a panic, so this check is what reports the overflow.
 	// ^T(0) is -1 for signed types (all bits set).
 	if isSigned[T]() && a == minValue[T]() && b == ^T(0) {
 		return 0, 0, false

@@ -107,10 +107,15 @@ fmt.Sprintf("%x", a) // implements fmt.Formatter: integer verbs work like on T
 - **`json:",string"`:** this struct tag option has no effect on `Int[T]`,
   because `encoding/json` applies it only to string, numeric and bool fields.
   `Int[T]` always encodes as a JSON number and rejects JSON strings.
+- **`json:",omitempty"`:** this option never omits an `Int[T]` field, because
+  `encoding/json` does not treat a struct value as empty. Use
+  `json:",omitzero"` to omit a zero `Int[T]`.
 - **JSON errors:** `encoding/json` does not add the document `Offset` to errors
   that `UnmarshalJSON` returns. Go 1.26 and earlier set `Field`; the default
   `encoding/json` in Go 1.27 leaves it empty.
-- **SQL:** `Scan(nil)` (SQL `NULL`) sets the value to 0, so `NULL` and 0 cannot be
+- **SQL:** `Scan` accepts `int64`, `uint64`, whole-number `float64`, `[]byte`,
+  `string` and `nil`, and rejects values that do not fit in `T`.
+  `Scan(nil)` (SQL `NULL`) sets the value to 0, so `NULL` and 0 cannot be
   told apart. To keep `NULL` distinct, use `sql.Null[safeint.Int[T]]` or
   `sql.NullInt64`.
 
@@ -221,6 +226,10 @@ go test ./...
 ### Go Version Compatibility
 
 CI tests against every Go release from 1.24 to 1.27. The minimum version is Go 1.24.
+CI also runs the tests with `GOARCH=386`, where `int` and `uint` are 32 bits wide.
+
+Use Go 1.27.3 for development (`.go-version`). The Go 1.27 CI lane uses the
+same version.
 
 ## Security Note
 
@@ -236,9 +245,3 @@ This project was inspired by and references ideas from:
 ## License
 
 MIT
-
-## Development toolchain
-
-Use Go 1.27.3 for development (`.go-version`) and the Go 1.27 CI lane.
-The library requires Go 1.24 or later (raised from Go 1.18), and CI also tests
-Go 1.24 through 1.26.

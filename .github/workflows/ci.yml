@@ -25,5 +25,11 @@ jobs:
       - name: Test
         run: go test -v -race -count=1 ./...
 
+      # int and uint are 32 bits wide on 386, so MulDiv and MulMod take the
+      # 64-bit-intermediate path for them. The race detector does not
+      # support 386.
+      - name: Test (32-bit)
+        run: GOARCH=386 go test -count=1 ./...
+
       - name: Vet
         run: go vet ./...

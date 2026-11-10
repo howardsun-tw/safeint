@@ -224,7 +224,7 @@ func (a Int[T]) Format(f fmt.State, verb rune) {
 	_, hasPrecision := f.Precision()
 	if (verb == 'v' || verb == 'd' || verb == 's') && !hasWidth && !hasPrecision &&
 		!f.Flag('+') && !f.Flag('-') && !f.Flag('#') && !f.Flag(' ') && !f.Flag('0') {
-		// Common case (Print, Println, plain %v and %d): skip the second
+		// Common case (Print, Println, plain %v, %d and %s): skip the second
 		// Fprintf parse.
 		io.WriteString(f, a.String())
 		return
@@ -303,6 +303,10 @@ func (a Int[T]) MarshalJSON() ([]byte, error) {
 // The `json:",string"` struct tag option has no effect: encoding/json applies
 // it only to string, numeric and bool fields, not to struct types such as
 // Int[T]. Int[T] always encodes as a JSON number and rejects JSON strings.
+//
+// The `json:",omitempty"` option never omits an Int[T] field, because
+// encoding/json does not treat a struct value as empty. Use
+// `json:",omitzero"` to omit a zero Int[T]; it calls IsZero.
 //
 // Int[T] cannot be a JSON object key. It does not implement
 // encoding.TextMarshaler, because encoding/json in Go 1.26 and earlier would
@@ -404,7 +408,10 @@ func (a Int[T]) Value() (driver.Value, error) {
 }
 
 // Scan implements sql.Scanner.
-// Accepts int64, float64 (whole numbers only), []byte, string, or nil.
+// Accepts int64, uint64, float64 (whole numbers only), []byte, string, or nil.
+// uint64 is not a standard driver.Value type, but some drivers pass it:
+// go-sql-driver/mysql 1.8 and later does for BIGINT UNSIGNED columns in the
+// text protocol.
 //
 // A nil src (SQL NULL) sets the value to 0 and returns nil, so NULL and 0
 // cannot be told apart after Scan. This differs from UnmarshalJSON, which
@@ -418,6 +425,13 @@ func (a *Int[T]) Scan(src interface{}) error {
 	switch v := src.(type) {
 	case int64:
 		r, ok := Convert[int64, T](v)
+		if !ok {
+			return fmt.Errorf("safeint: value %d overflows %T", v, a.val)
+		}
+		a.val = r
+		return nil
+	case uint64:
+		r, ok := Convert[uint64, T](v)
 		if !ok {
 			return fmt.Errorf("safeint: value %d overflows %T", v, a.val)
 		}

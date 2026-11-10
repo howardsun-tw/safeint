@@ -1048,8 +1048,9 @@ func TestUnmarshalJSONErrorType(t *testing.T) {
 			t.Fatalf("error type = %T, want *json.SyntaxError", err)
 		}
 	})
-	// encoding/json does not annotate errors returned by an Unmarshaler with
-	// Struct/Field, so only Type and Value are asserted for nested fields.
+	// Whether encoding/json sets Field on an error returned by an Unmarshaler
+	// depends on the Go version (see UnmarshalJSON), so only Type and Value
+	// are asserted for nested fields.
 	t.Run("nested_struct_field", func(t *testing.T) {
 		var s struct {
 			Count Int[uint8] `json:"count"`
@@ -1344,6 +1345,33 @@ func TestScan_Int64(t *testing.T) {
 	})
 }
 
+func checkScanUint64[T Integer](t *testing.T, src uint64, want T, ok bool) {
+	t.Helper()
+	v := New(T(7))
+	err := v.Scan(src)
+	if (err == nil) != ok {
+		t.Fatalf("%T.Scan(uint64(%d)): error = %v, want success = %v", v, src, err, ok)
+	}
+	if !ok {
+		want = 7 // Failed scans must preserve the previous value.
+	}
+	if v.Val() != want {
+		t.Fatalf("%T.Scan(uint64(%d)): value = %d, want %d", v, src, v.Val(), want)
+	}
+}
+
+// TestScan_Uint64 covers drivers that pass uint64 to a Scanner, although it
+// is not a standard driver.Value type. go-sql-driver/mysql 1.8 and later does
+// this for BIGINT UNSIGNED columns in the text protocol.
+func TestScan_Uint64(t *testing.T) {
+	checkScanUint64[uint64](t, 0, 0, true)
+	checkScanUint64[uint64](t, math.MaxUint64, math.MaxUint64, true)
+	checkScanUint64[int64](t, math.MaxInt64, math.MaxInt64, true)
+	checkScanUint64[int64](t, math.MaxInt64+1, 0, false)
+	checkScanUint64[uint8](t, math.MaxUint8, math.MaxUint8, true)
+	checkScanUint64[uint8](t, math.MaxUint8+1, 0, false)
+}
+
 func TestScan_Nil(t *testing.T) {
 	v := New[int32](99)
 	if err := v.Scan(nil); err != nil {
@@ -1527,7 +1555,8 @@ func TestScan_ByteSlice(t *testing.T) {
 		}
 	})
 	t.Run("uint64_max", func(t *testing.T) {
-		// []byte is common from MySQL for BIGINT UNSIGNED.
+		// go-sql-driver/mysql before 1.8 passes []byte for BIGINT UNSIGNED
+		// in the text protocol.
 		var v Int[uint64]
 		if err := v.Scan([]byte("18446744073709551615")); err != nil {
 			t.Fatalf("Scan error: %v", err)
