@@ -1368,7 +1368,7 @@ func TestMustDivStandalone(t *testing.T) {
 		})
 	})
 	t.Run("div_by_zero", func(t *testing.T) {
-		expectPanic(t, "MustDiv(1,0)", "safeint: Div overflow", func() {
+		expectPanic(t, "MustDiv(1,0)", "safeint: Div by zero", func() {
 			MustDiv[int64](1, 0)
 		})
 	})
@@ -1404,8 +1404,8 @@ func TestMustMulDivStandalone(t *testing.T) {
 			}
 		})
 	})
-	t.Run("overflow_c_zero", func(t *testing.T) {
-		expectPanic(t, "MustMulDiv(1,2,0)", "safeint: MulDiv overflow", func() {
+	t.Run("c_zero", func(t *testing.T) {
+		expectPanic(t, "MustMulDiv(1,2,0)", "safeint: MulDiv by zero", func() {
 			MustMulDiv[int64](1, 2, 0)
 		})
 	})
@@ -1606,6 +1606,74 @@ func FuzzDivUint64(f *testing.F) {
 		}
 		if ok && got != want {
 			t.Errorf("Div(%d, %d): got=%d, want=%d", a, b, got, want)
+		}
+	})
+}
+
+// The MulDiv/MulMod fuzz targets check the 128-bit paths against math/big.
+// QuoRem truncates toward zero, as Go's / and % do.
+
+func FuzzMulDivMulModInt64(f *testing.F) {
+	f.Add(int64(7), int64(5), int64(-3)) // remainder keeps the sign of a*b
+	f.Add(int64(1), int64(2), int64(0))
+	f.Add(int64(1<<32), int64(1<<32), int64(1)) // high word equals |c|
+	f.Add(int64(1<<62), int64(4), int64(2))     // quotient 2^63 overflows
+	f.Add(int64(1<<62), int64(4), int64(-2))    // quotient -2^63 fits
+	f.Add(int64(1<<62), int64(6), int64(-2))    // quotient below -2^63
+	f.Add(int64(math.MinInt64), int64(math.MinInt64), int64(math.MinInt64))
+	f.Add(int64(-math.MaxInt64), int64(math.MaxInt64), int64(3))
+	f.Fuzz(func(t *testing.T, a, b, c int64) {
+		q, qok := MulDiv(a, b, c)
+		r, rok := MulMod(a, b, c)
+		if c == 0 {
+			if qok || q != 0 || rok || r != 0 {
+				t.Errorf("c=0: MulDiv(%d,%d,0)=(%d,%v), MulMod=(%d,%v), want (0,false) for both", a, b, q, qok, r, rok)
+			}
+			return
+		}
+		prod := new(big.Int).Mul(big.NewInt(a), big.NewInt(b))
+		wantQ, wantR := new(big.Int).QuoRem(prod, big.NewInt(c), new(big.Int))
+		if wantQ.IsInt64() {
+			if !qok || q != wantQ.Int64() {
+				t.Errorf("MulDiv(%d,%d,%d)=(%d,%v), want (%s,true)", a, b, c, q, qok, wantQ)
+			}
+		} else if qok || q != 0 {
+			t.Errorf("MulDiv(%d,%d,%d)=(%d,%v), want (0,false): exact quotient is %s", a, b, c, q, qok, wantQ)
+		}
+		// |remainder| < |c| <= 2^63, so the remainder always fits.
+		if !rok || !wantR.IsInt64() || r != wantR.Int64() {
+			t.Errorf("MulMod(%d,%d,%d)=(%d,%v), want (%s,true)", a, b, c, r, rok, wantR)
+		}
+	})
+}
+
+func FuzzMulDivMulModUint64(f *testing.F) {
+	f.Add(uint64(6), uint64(7), uint64(2))
+	f.Add(uint64(1), uint64(2), uint64(0))
+	f.Add(uint64(1<<32), uint64(1<<32), uint64(1))                                  // high word equals c
+	f.Add(uint64(math.MaxUint64), uint64(math.MaxUint64), uint64(math.MaxUint64-1)) // high word equals c
+	f.Add(uint64(math.MaxUint64), uint64(math.MaxUint64), uint64(math.MaxUint64))
+	f.Add(uint64(math.MaxUint64), uint64(math.MaxUint64), uint64(3))
+	f.Fuzz(func(t *testing.T, a, b, c uint64) {
+		q, qok := MulDiv(a, b, c)
+		r, rok := MulMod(a, b, c)
+		if c == 0 {
+			if qok || q != 0 || rok || r != 0 {
+				t.Errorf("c=0: MulDiv(%d,%d,0)=(%d,%v), MulMod=(%d,%v), want (0,false) for both", a, b, q, qok, r, rok)
+			}
+			return
+		}
+		prod := new(big.Int).Mul(new(big.Int).SetUint64(a), new(big.Int).SetUint64(b))
+		wantQ, wantR := new(big.Int).QuoRem(prod, new(big.Int).SetUint64(c), new(big.Int))
+		if wantQ.IsUint64() {
+			if !qok || q != wantQ.Uint64() {
+				t.Errorf("MulDiv(%d,%d,%d)=(%d,%v), want (%s,true)", a, b, c, q, qok, wantQ)
+			}
+		} else if qok || q != 0 {
+			t.Errorf("MulDiv(%d,%d,%d)=(%d,%v), want (0,false): exact quotient is %s", a, b, c, q, qok, wantQ)
+		}
+		if !rok || r != wantR.Uint64() {
+			t.Errorf("MulMod(%d,%d,%d)=(%d,%v), want (%s,true)", a, b, c, r, rok, wantR)
 		}
 	})
 }
